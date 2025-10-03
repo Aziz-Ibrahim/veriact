@@ -3,23 +3,41 @@
 import { UserButton } from '@clerk/nextjs';
 import { useStore } from '@/store/useStore';
 import { useState } from 'react';
+import { useExtractActions } from '@/hooks/useExtractActions';
+import { FileText, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function DashboardClient() {
-  const { actionItems, isProcessing } = useStore();
+  const { actionItems } = useStore();
+  const { extractActions, isProcessing, error } = useExtractActions();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [meetingTitle, setMeetingTitle] = useState('');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      setSuccessMessage(null);
+      // Auto-populate meeting title from filename
+      if (!meetingTitle) {
+        setMeetingTitle(file.name.replace(/\.[^/.]+$/, ''));
+      }
     }
   };
 
   const handleProcess = async () => {
     if (!selectedFile) return;
     
-    // TODO: Process the file locally
-    console.log('Processing file:', selectedFile.name);
+    const result = await extractActions(selectedFile, meetingTitle);
+    
+    if (result.success) {
+      setSuccessMessage(`Successfully extracted ${result.count} action item${result.count !== 1 ? 's' : ''}!`);
+      setSelectedFile(null);
+      setMeetingTitle('');
+      // Reset file input
+      const fileInput = document.getElementById('file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+    }
   };
 
   return (
@@ -52,29 +70,55 @@ export default function DashboardClient() {
             </p>
           </div>
 
+          {/* Success Message */}
+          {successMessage && (
+            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <p className="text-green-800 font-medium">{successMessage}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                <p className="text-red-800">{error}</p>
+              </div>
+            </div>
+          )}
+
           {/* File Processing Card */}
           <div className="bg-white rounded-xl shadow-md p-8 mb-8">
             <h2 className="text-xl font-semibold mb-4">Process Meeting Transcript</h2>
             
+            {/* Meeting Title Input */}
+            <div className="mb-6">
+              <label htmlFor="meeting-title" className="block text-sm font-medium text-gray-700 mb-2">
+                Meeting Title (Optional)
+              </label>
+              <input
+                id="meeting-title"
+                type="text"
+                value={meetingTitle}
+                onChange={(e) => setMeetingTitle(e.target.value)}
+                placeholder="e.g., Weekly Team Standup - Jan 15"
+                className="w-full px-4 py-2 border border-gray-300 text-indigo-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={isProcessing}
+              />
+            </div>
+
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-indigo-400 transition">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400 mb-4"
-                stroke="currentColor"
-                fill="none"
-                viewBox="0 0 48 48"
-              >
-                <path
-                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               
               <div className="mb-4">
                 <label
                   htmlFor="file-input"
-                  className="cursor-pointer inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                  className={`cursor-pointer inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition ${
+                    isProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
                   Select Transcript File
                 </label>
@@ -82,8 +126,9 @@ export default function DashboardClient() {
                   id="file-input"
                   type="file"
                   className="hidden"
-                  accept=".txt,.docx,.pdf"
+                  accept=".txt,.docx"
                   onChange={handleFileSelect}
+                  disabled={isProcessing}
                 />
               </div>
 
@@ -92,11 +137,14 @@ export default function DashboardClient() {
                   <p className="text-sm text-gray-600">
                     Selected: <span className="font-medium">{selectedFile.name}</span>
                   </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {(selectedFile.size / 1024).toFixed(2)} KB
+                  </p>
                 </div>
               )}
 
               <p className="text-sm text-gray-500">
-                Supports TXT, DOCX, and PDF files
+                Supports TXT and DOCX files (PDF coming soon)
               </p>
             </div>
 
@@ -105,9 +153,16 @@ export default function DashboardClient() {
                 <button
                   onClick={handleProcess}
                   disabled={isProcessing}
-                  className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
-                  {isProcessing ? 'Processing...' : 'Extract Action Items'}
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <span>Extract Action Items</span>
+                  )}
                 </button>
               </div>
             )}
@@ -124,19 +179,7 @@ export default function DashboardClient() {
 
             {actionItems.length === 0 ? (
               <div className="text-center py-12">
-                <svg
-                  className="mx-auto h-16 w-16 text-gray-300 mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
+                <FileText className="mx-auto h-16 w-16 text-gray-300 mb-4" />
                 <p className="text-gray-500 mb-2">No action items yet</p>
                 <p className="text-sm text-gray-400">
                   Process a meeting transcript to get started
@@ -156,6 +199,11 @@ export default function DashboardClient() {
                           <span>👤 {item.assignee}</span>
                           {item.deadline && (
                             <span>📅 {new Date(item.deadline).toLocaleDateString()}</span>
+                          )}
+                          {item.meetingTitle && (
+                            <span className="text-xs text-gray-400">
+                              from: {item.meetingTitle}
+                            </span>
                           )}
                         </div>
                       </div>
@@ -194,7 +242,7 @@ export default function DashboardClient() {
               <div>
                 <p className="font-medium text-green-900">Privacy Protected</p>
                 <p className="text-sm text-green-700">
-                  Your files are processed locally in your browser. Nothing is sent to our servers.
+                  Your files are processed locally in your browser. Results are saved to your browser's local storage only.
                 </p>
               </div>
             </div>
