@@ -28,3 +28,9 @@ export interface StorageProvider {
   connected: boolean;
   email?: string;
 }
+
+export interface CreateRoomData {
+  title: string;
+  actionItems: ActionItem[];
+  agreedToPrivacy: boolean;
+}

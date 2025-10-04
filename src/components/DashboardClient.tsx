@@ -4,9 +4,10 @@ import { UserButton } from '@clerk/nextjs';
 import { useStore } from '@/store/useStore';
 import { useState } from 'react';
 import { useExtractActions } from '@/hooks/useExtractActions';
-import { FileText, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Loader2, AlertCircle, CheckCircle, Users } from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import ExportMenu from './ExportMenu';
+import CreateRoomModal from './CreateRoomModal';
 
 export default function DashboardClient() {
   const { actionItems } = useStore();
@@ -14,6 +15,8 @@ export default function DashboardClient() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [meetingTitle, setMeetingTitle] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
+  const [lastMeetingTitle, setLastMeetingTitle] = useState('');
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -34,6 +37,7 @@ export default function DashboardClient() {
     
     if (result.success) {
       setSuccessMessage(`Successfully extracted ${result.count} action item${result.count !== 1 ? 's' : ''}!`);
+      setLastMeetingTitle(meetingTitle || selectedFile.name.replace(/\.[^/.]+$/, ''));
       setSelectedFile(null);
       setMeetingTitle('');
       // Reset file input
@@ -72,12 +76,21 @@ export default function DashboardClient() {
             </p>
           </div>
 
-          {/* Success Message */}
+          {/* Success Message with Create Room Option */}
           {successMessage && (
             <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center space-x-3">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <p className="text-green-800 font-medium">{successMessage}</p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <p className="text-green-800 font-medium">{successMessage}</p>
+                </div>
+                <button
+                  onClick={() => setShowCreateRoomModal(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Share with Team</span>
+                </button>
               </div>
             </div>
           )}
@@ -223,6 +236,14 @@ export default function DashboardClient() {
           </div>
         </div>
       </main>
+
+      {/* Create Room Modal */}
+      <CreateRoomModal
+        isOpen={showCreateRoomModal}
+        onClose={() => setShowCreateRoomModal(false)}
+        actionItems={actionItems}
+        meetingTitle={lastMeetingTitle}
+      />
     </div>
   );
 }
