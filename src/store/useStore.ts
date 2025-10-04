@@ -17,9 +17,31 @@ interface VeriActStore {
   clearData: () => void;
 }
 
+// Initialize state from localStorage if available
+const loadFromLocalStorage = () => {
+  if (typeof window === 'undefined') return { transcripts: [], actionItems: [] };
+  
+  try {
+    const meetings = localStorage.getItem('veriact-meetings');
+    if (meetings) {
+      const parsedMeetings = JSON.parse(meetings);
+      const allActionItems = parsedMeetings.flatMap((m: any) => m.actionItems || []);
+      return {
+        transcripts: parsedMeetings,
+        actionItems: allActionItems,
+      };
+    }
+  } catch (error) {
+    console.error('Failed to load from localStorage:', error);
+  }
+  return { transcripts: [], actionItems: [] };
+};
+
+const initialState = loadFromLocalStorage();
+
 export const useStore = create<VeriActStore>((set) => ({
-  transcripts: [],
-  actionItems: [],
+  transcripts: initialState.transcripts,
+  actionItems: initialState.actionItems,
   storageProvider: { type: 'local', connected: true },
   isProcessing: false,
 
@@ -34,16 +56,26 @@ export const useStore = create<VeriActStore>((set) => ({
     })),
 
   updateActionItem: (id, updates) =>
-    set((state) => ({
-      actionItems: state.actionItems.map((item) =>
+    set((state) => {
+      const updatedItems = state.actionItems.map((item) =>
         item.id === id ? { ...item, ...updates } : item
-      ),
-    })),
+      );
+      
+      // Update localStorage
+      syncToLocalStorage(state.transcripts, updatedItems);
+      
+      return { actionItems: updatedItems };
+    }),
 
   deleteActionItem: (id) =>
-    set((state) => ({
-      actionItems: state.actionItems.filter((item) => item.id !== id),
-    })),
+    set((state) => {
+      const filteredItems = state.actionItems.filter((item) => item.id !== id);
+      
+      // Update localStorage
+      syncToLocalStorage(state.transcripts, filteredItems);
+      
+      return { actionItems: filteredItems };
+    }),
 
   setStorageProvider: (provider) =>
     set({ storageProvider: provider }),
@@ -51,9 +83,31 @@ export const useStore = create<VeriActStore>((set) => ({
   setProcessing: (processing) =>
     set({ isProcessing: processing }),
 
-  clearData: () =>
+  clearData: () => {
+    // Clear localStorage too
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('veriact-meetings');
+    }
     set({
       transcripts: [],
       actionItems: [],
-    }),
+    });
+  },
 }));
+
+// Helper to sync changes back to localStorage
+function syncToLocalStorage(transcripts: MeetingTranscript[], actionItems: ActionItem[]) {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    // Rebuild transcripts with updated action items
+    const updatedTranscripts = transcripts.map(transcript => ({
+      ...transcript,
+      actionItems: actionItems.filter(item => item.meetingTitle === transcript.title),
+    }));
+    
+    localStorage.setItem('veriact-meetings', JSON.stringify(updatedTranscripts));
+  } catch (error) {
+    console.error('Failed to sync to localStorage:', error);
+  }
+}

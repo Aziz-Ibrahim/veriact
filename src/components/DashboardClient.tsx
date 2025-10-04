@@ -5,6 +5,8 @@ import { useStore } from '@/store/useStore';
 import { useState } from 'react';
 import { useExtractActions } from '@/hooks/useExtractActions';
 import { FileText, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import ActionItemCard from './ActionItemCard';
+import ExportMenu from './ExportMenu';
 
 export default function DashboardClient() {
   const { actionItems } = useStore();
@@ -105,7 +107,7 @@ export default function DashboardClient() {
                 value={meetingTitle}
                 onChange={(e) => setMeetingTitle(e.target.value)}
                 placeholder="e.g., Weekly Team Standup - Jan 15"
-                className="w-full px-4 py-2 border border-gray-300 text-indigo-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 disabled={isProcessing}
               />
             </div>
@@ -171,10 +173,13 @@ export default function DashboardClient() {
           {/* Action Items List */}
           <div className="bg-white rounded-xl shadow-md p-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold">Your Action Items</h2>
-              <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">
-                {actionItems.length} items
-              </span>
+              <div className="flex items-center space-x-4">
+                <h2 className="text-xl font-semibold">Your Action Items</h2>
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">
+                  {actionItems.length} items
+                </span>
+              </div>
+              <ExportMenu actionItems={actionItems} />
             </div>
 
             {actionItems.length === 0 ? (
@@ -188,38 +193,7 @@ export default function DashboardClient() {
             ) : (
               <div className="space-y-4">
                 {actionItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 mb-1">{item.task}</p>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600">
-                          <span>👤 {item.assignee}</span>
-                          {item.deadline && (
-                            <span>📅 {new Date(item.deadline).toLocaleDateString()}</span>
-                          )}
-                          {item.meetingTitle && (
-                            <span className="text-xs text-gray-400">
-                              from: {item.meetingTitle}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          item.status === 'completed'
-                            ? 'bg-green-100 text-green-700'
-                            : item.status === 'in-progress'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </div>
-                  </div>
+                  <ActionItemCard key={item.id} item={item} />
                 ))}
               </div>
             )}
