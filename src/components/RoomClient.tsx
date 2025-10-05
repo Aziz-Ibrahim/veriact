@@ -14,6 +14,11 @@ export default function RoomClient({ room, initialActionItems }: RoomClientProps
   const { user } = useUser();
   const [actionItems, setActionItems] = useState(initialActionItems);
   const [copied, setCopied] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isOwner = user?.id === room.created_by;
 

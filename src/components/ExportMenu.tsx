@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Download, Calendar, Copy, FileJson, FileSpreadsheet, ChevronDown, Trash2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Download, Calendar, Copy, FileJson, FileSpreadsheet, ChevronDown, Upload } from 'lucide-react';
 import { ActionItem } from '@/types';
 import { exportAsJSON, exportAsCSV, exportAsCalendar, copyToClipboard } from '@/lib/exportUtils';
 import toast from 'react-hot-toast';
@@ -9,33 +9,47 @@ import toast from 'react-hot-toast';
 interface ExportMenuProps {
   actionItems: ActionItem[];
   onClearAfterExport?: () => void;
+  onImport?: (items: ActionItem[]) => void;
 }
 
-export default function ExportMenu({ actionItems }: ExportMenuProps) {
+export default function ExportMenu({ actionItems, onClearAfterExport }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleExport = async (type: 'json' | 'csv' | 'calendar' | 'clipboard') => {
     try {
+      const onComplete = () => {
+        if (onClearAfterExport) {
+          onClearAfterExport();
+          toast.success('Items exported and cleared from local storage', {
+            icon: '✅',
+          });
+        }
+      };
+
       switch (type) {
         case 'json':
-          exportAsJSON(actionItems);
+          exportAsJSON(actionItems, onComplete);
+          toast.success('Exported as JSON');
           break;
         case 'csv':
-          exportAsCSV(actionItems);
+          exportAsCSV(actionItems, onComplete);
+          toast.success('Exported as CSV');
           break;
         case 'calendar':
-          exportAsCalendar(actionItems);
+          exportAsCalendar(actionItems, onComplete);
+          toast.success('Exported to calendar');
           break;
         case 'clipboard':
           await copyToClipboard(actionItems);
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
+          toast.success('Copied to clipboard');
           break;
       }
       setIsOpen(false);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Export failed');
+      toast.error(error instanceof Error ? error.message : 'Export failed');
     }
   };
 
