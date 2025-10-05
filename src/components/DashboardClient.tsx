@@ -1,11 +1,10 @@
-// src/components/DashboardClient.tsx
 'use client';
 
 import { UserButton } from '@clerk/nextjs';
 import { useStore } from '@/store/useStore';
 import { useState, useEffect } from 'react';
 import { useExtractActions } from '@/hooks/useExtractActions';
-import { FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield, Calendar } from 'lucide-react';
+import { FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield, Calendar, Menu, X } from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import CreateRoomModal from './CreateRoomModal';
 import toast from 'react-hot-toast';
@@ -33,6 +32,7 @@ export default function DashboardClient() {
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('home');
   const [mounted, setMounted] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -160,16 +160,36 @@ export default function DashboardClient() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-50
+        w-64 bg-white border-r border-gray-200 flex flex-col
+        transform transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
         {/* Logo */}
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-xl">V</span>
             </div>
             <span className="text-xl font-bold text-gray-900">VeriAct</span>
           </div>
+          {/* Close button for mobile */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden text-gray-500 hover:text-gray-700"
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         {/* Privacy Notice */}
@@ -186,9 +206,12 @@ export default function DashboardClient() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <button
-            onClick={() => setViewMode('home')}
+            onClick={() => {
+              setViewMode('home');
+              setSidebarOpen(false);
+            }}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               viewMode === 'home'
                 ? 'bg-indigo-50 text-indigo-600'
@@ -205,7 +228,10 @@ export default function DashboardClient() {
           </button>
 
           <button
-            onClick={() => setViewMode('upload')}
+            onClick={() => {
+              setViewMode('upload');
+              setSidebarOpen(false);
+            }}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               viewMode === 'upload'
                 ? 'bg-indigo-50 text-indigo-600'
@@ -217,7 +243,10 @@ export default function DashboardClient() {
           </button>
 
           <button
-            onClick={() => setViewMode('rooms')}
+            onClick={() => {
+              setViewMode('rooms');
+              setSidebarOpen(false);
+            }}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               viewMode === 'rooms'
                 ? 'bg-indigo-50 text-indigo-600'
@@ -241,7 +270,10 @@ export default function DashboardClient() {
             {actionItems.length > 0 && (
               <>
                 <button
-                  onClick={() => setShowCreateRoomModal(true)}
+                  onClick={() => {
+                    setShowCreateRoomModal(true);
+                    setSidebarOpen(false);
+                  }}
                   className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition"
                 >
                   <Users className="w-4 h-4" />
@@ -249,7 +281,10 @@ export default function DashboardClient() {
                 </button>
 
                 <button
-                  onClick={handleExportJSON}
+                  onClick={() => {
+                    handleExportJSON();
+                    setSidebarOpen(false);
+                  }}
                   className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition"
                 >
                   <Download className="w-4 h-4" />
@@ -257,7 +292,10 @@ export default function DashboardClient() {
                 </button>
 
                 <button
-                  onClick={handleExportCSV}
+                  onClick={() => {
+                    handleExportCSV();
+                    setSidebarOpen(false);
+                  }}
                   className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition"
                 >
                   <FileText className="w-4 h-4" />
@@ -287,7 +325,24 @@ export default function DashboardClient() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-8">
+        {/* Mobile Header */}
+        <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between sticky top-0 z-30">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-gray-700 hover:text-gray-900"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold">V</span>
+            </div>
+            <span className="text-lg font-bold text-gray-900">VeriAct</span>
+          </div>
+          <UserButton afterSignOutUrl="/" />
+        </div>
+
+        <div className="max-w-6xl mx-auto p-4 sm:p-8">
           {/* Error Message */}
           {error && (
             <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -309,8 +364,8 @@ export default function DashboardClient() {
                 transition={{ duration: 0.2 }}
               >
                 <div className="mb-6">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Action Items</h1>
-                  <p className="text-gray-600">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Your Action Items</h1>
+                  <p className="text-sm sm:text-base text-gray-600">
                     Track and manage action items from your meetings
                   </p>
                 </div>
@@ -319,17 +374,17 @@ export default function DashboardClient() {
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                     <FileText className="mx-auto h-16 w-16 text-gray-300 mb-4" />
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">No action items yet</h3>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-sm sm:text-base text-gray-600 mb-6">
                       Process a meeting transcript or import existing items to get started
                     </p>
-                    <div className="flex items-center justify-center space-x-4">
+                    <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-4">
                       <button
                         onClick={() => setViewMode('upload')}
-                        className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                        className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                       >
                         Process Transcript
                       </button>
-                      <label className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition cursor-pointer">
+                      <label className="w-full sm:w-auto px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition cursor-pointer text-center">
                         Import JSON
                         <input
                           type="file"
@@ -370,8 +425,8 @@ export default function DashboardClient() {
                 transition={{ duration: 0.2 }}
               >
                 <div className="mb-6">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">Process Meeting Transcript</h1>
-                  <p className="text-gray-600">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Process Meeting Transcript</h1>
+                  <p className="text-sm sm:text-base text-gray-600">
                     Upload a transcript file to extract action items automatically
                   </p>
                 </div>
@@ -423,17 +478,17 @@ export default function DashboardClient() {
                   </div>
 
                   {selectedFile && (
-                    <div className="mt-6 flex justify-end space-x-4">
+                    <div className="mt-6 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
                       <button
                         onClick={() => setSelectedFile(null)}
-                        className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                        className="w-full sm:w-auto px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleProcess}
                         disabled={isProcessing}
-                        className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
+                        className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                       >
                         {isProcessing ? (
                           <>
@@ -460,8 +515,8 @@ export default function DashboardClient() {
                 transition={{ duration: 0.2 }}
               >
                 <div className="mb-6">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">My Shared Rooms</h1>
-                  <p className="text-gray-600">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Shared Rooms</h1>
+                  <p className="text-sm sm:text-base text-gray-600">
                     Collaborate with your team on action items
                   </p>
                 </div>
@@ -475,12 +530,12 @@ export default function DashboardClient() {
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                     <Users className="mx-auto h-16 w-16 text-gray-300 mb-4" />
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">No shared rooms yet</h3>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-sm sm:text-base text-gray-600 mb-6">
                       Create a room to collaborate with your team on action items
                     </p>
                     <button
                       onClick={() => setViewMode('home')}
-                      className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                      className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                     >
                       View Action Items
                     </button>
