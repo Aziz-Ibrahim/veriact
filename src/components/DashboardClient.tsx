@@ -545,19 +545,19 @@ export default function DashboardClient() {
                     {myRooms.map((room) => (
                       <div
                         key={room.id}
-                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:border-indigo-300 transition"
+                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:border-indigo-300 transition"
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between space-y-4 sm:space-y-0">
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">{room.title}</h3>
-                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">{room.title}</h3>
+                            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600">
                               <span className="flex items-center">
                                 🔗 {room.room_code}
                               </span>
                               {mounted && (
                                 <>
                                   <span className="flex items-center">
-                                    <Calendar className="w-4 h-4 mr-1" />
+                                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                                     Created {new Date(room.created_at).toLocaleDateString()}
                                   </span>
                                   <span className="flex items-center text-orange-600">
@@ -569,9 +569,7 @@ export default function DashboardClient() {
                           </div>
                           <a
                             href={`/room/${room.room_code}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm flex-shrink-0"
+                            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm text-center flex-shrink-0"
                           >
                             Open Room
                           </a>

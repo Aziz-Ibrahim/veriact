@@ -96,25 +96,36 @@ export default function RoomClient({ room, initialActionItems }: RoomClientProps
   const expiresAt = new Date(room.expires_at);
   const daysUntilExpiry = Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading room...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-xl">V</span>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{room.title}</h1>
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900">{room.title}</h1>
                 <p className="text-xs text-gray-500">Room: {room.room_code}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 w-full sm:w-auto">
               <button
                 onClick={handleCopyLink}
-                className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
               >
                 {copied ? (
                   <>
@@ -131,9 +142,9 @@ export default function RoomClient({ room, initialActionItems }: RoomClientProps
               {user && (
                 <a
                   href="/dashboard"
-                  className="flex items-center space-x-2 px-4 py-2 text-indigo-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm"
+                  className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm"
                 >
-                  <span>My Dashboard</span>
+                  <span>Dashboard</span>
                   <ExternalLink className="w-4 h-4" />
                 </a>
               )}
@@ -143,7 +154,7 @@ export default function RoomClient({ room, initialActionItems }: RoomClientProps
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-6 sm:py-8">
         <div className="max-w-5xl mx-auto">
           {/* Info Banner */}
           <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
