@@ -1,3 +1,4 @@
+// src/store/useStore.ts
 import { create } from 'zustand';
 import { ActionItem, MeetingTranscript, StorageProvider } from '@/types';
 
@@ -15,6 +16,7 @@ interface VeriActStore {
   setStorageProvider: (provider: StorageProvider) => void;
   setProcessing: (processing: boolean) => void;
   clearData: () => void;
+  clearActionItems: () => void;
 }
 
 // Initialize state from localStorage if available
@@ -91,6 +93,17 @@ export const useStore = create<VeriActStore>((set) => ({
     set({
       transcripts: [],
       actionItems: [],
+    });
+  },
+
+  clearActionItems: () => {
+    // Clear only action items from state and localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('veriact-meetings');
+    }
+    set({
+      actionItems: [],
+      transcripts: [],
     });
   },
 }));

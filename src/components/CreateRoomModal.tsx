@@ -9,6 +9,7 @@ interface CreateRoomModalProps {
   onClose: () => void;
   actionItems: ActionItem[];
   meetingTitle: string;
+  onRoomCreated?: () => void;
 }
 
 export default function CreateRoomModal({
@@ -126,7 +127,7 @@ export default function CreateRoomModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g., Q1 Planning Meeting - Jan 2025"
-                  className="w-full px-4 py-2 text-indigo-600 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 text-indigo-600 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
 

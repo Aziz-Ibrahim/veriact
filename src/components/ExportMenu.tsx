@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Calendar, Copy, FileJson, FileSpreadsheet, ChevronDown } from 'lucide-react';
+import { Download, Calendar, Copy, FileJson, FileSpreadsheet, ChevronDown, Trash2 } from 'lucide-react';
 import { ActionItem } from '@/types';
 import { exportAsJSON, exportAsCSV, exportAsCalendar, copyToClipboard } from '@/lib/exportUtils';
+import toast from 'react-hot-toast';
 
 interface ExportMenuProps {
   actionItems: ActionItem[];
+  onClearAfterExport?: () => void;
 }
 
 export default function ExportMenu({ actionItems }: ExportMenuProps) {

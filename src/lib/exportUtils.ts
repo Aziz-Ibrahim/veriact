@@ -1,14 +1,15 @@
 import { ActionItem } from '@/types';
 
 // Export as JSON
-export function exportAsJSON(actionItems: ActionItem[]) {
+export function exportAsJSON(actionItems: ActionItem[], onComplete?: () => void) {
   const dataStr = JSON.stringify(actionItems, null, 2);
   const blob = new Blob([dataStr], { type: 'application/json' });
   downloadFile(blob, `veriact-actions-${getDateString()}.json`);
+  if (onComplete) onComplete();
 }
 
 // Export as CSV
-export function exportAsCSV(actionItems: ActionItem[]) {
+export function exportAsCSV(actionItems: ActionItem[], onComplete?: () => void) {
   const headers = ['Task', 'Assignee', 'Deadline', 'Status', 'Meeting', 'Created'];
   const rows = actionItems.map(item => [
     escapeCSV(item.task),
@@ -26,10 +27,11 @@ export function exportAsCSV(actionItems: ActionItem[]) {
 
   const blob = new Blob([csvContent], { type: 'text/csv' });
   downloadFile(blob, `veriact-actions-${getDateString()}.csv`);
+  if (onComplete) onComplete();
 }
 
 // Export as iCalendar (.ics) for calendar import
-export function exportAsCalendar(actionItems: ActionItem[]) {
+export function exportAsCalendar(actionItems: ActionItem[], onComplete?: () => void) {
   const itemsWithDeadlines = actionItems.filter(item => item.deadline);
   
   if (itemsWithDeadlines.length === 0) {

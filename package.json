@@ -12,6 +12,7 @@
     "@clerk/nextjs": "^6.33.1",
     "@supabase/supabase-js": "^2.58.0",
     "@tanstack/react-query": "^5.90.2",
+    "framer-motion": "^12.23.22",
     "lucide-react": "^0.544.0",
     "mammoth": "^1.11.0",
     "motion": "^12.23.22",
@@ -20,6 +21,7 @@
     "pdf-parse": "^2.1.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-hot-toast": "^2.6.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
