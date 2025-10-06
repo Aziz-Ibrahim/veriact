@@ -568,7 +568,7 @@ export default function DashboardClient() {
                             </div>
                           </div>
                           <a
-                            href={`/room/${room.room_code}`}
+                            href={`/dashboard/room/${room.room_code}`}
                             className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm text-center flex-shrink-0"
                           >
                             Open Room
