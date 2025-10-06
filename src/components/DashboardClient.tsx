@@ -7,6 +7,7 @@ import { useExtractActions } from '@/hooks/useExtractActions';
 import { FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield, Calendar, Menu, X } from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import CreateRoomModal from './CreateRoomModal';
+import RoomView from './RoomView';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem } from '@/types';
@@ -19,7 +20,7 @@ interface Room {
   expires_at: string;
 }
 
-type ViewMode = 'home' | 'upload' | 'rooms';
+type ViewMode = 'home' | 'upload' | 'rooms' | 'room-view';
 
 export default function DashboardClient() {
   const { actionItems, clearActionItems, addActionItems } = useStore();
@@ -33,6 +34,7 @@ export default function DashboardClient() {
   const [viewMode, setViewMode] = useState<ViewMode>('home');
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedRoomCode, setSelectedRoomCode] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -59,6 +61,12 @@ export default function DashboardClient() {
     }
   };
 
+  const handleOpenRoom = (roomCode: string) => {
+    setSelectedRoomCode(roomCode);
+    setViewMode('room-view');
+  };
+
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -71,9 +79,9 @@ export default function DashboardClient() {
 
   const handleProcess = async () => {
     if (!selectedFile) return;
-    
+
     const result = await extractActions(selectedFile, meetingTitle);
-    
+
     if (result.success) {
       toast.success(`Extracted ${result.count} action items!`);
       setLastMeetingTitle(meetingTitle || selectedFile.name.replace(/\.[^/.]+$/, ''));
@@ -103,7 +111,7 @@ export default function DashboardClient() {
     link.download = `veriact-actions-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    
+
     setTimeout(() => {
       clearActionItems();
       toast.success('Exported and cleared!');
@@ -139,22 +147,51 @@ export default function DashboardClient() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const isCSV = file.name.endsWith('.csv');
+
     try {
       const text = await file.text();
-      const importedItems = JSON.parse(text) as ActionItem[];
-      
-      if (!Array.isArray(importedItems)) {
-        throw new Error('Invalid JSON format');
+
+      if (isCSV) {
+        // Parse CSV
+        const lines = text.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+
+        const importedItems: ActionItem[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',');
+          if (values.length < 4) continue;
+
+          importedItems.push({
+            id: `imported-${Date.now()}-${i}`,
+            task: values[0].replace(/^"|"$/g, ''),
+            assignee: values[1].replace(/^"|"$/g, ''),
+            deadline: values[2] || null,
+            status: (values[3] || 'pending') as 'pending' | 'in-progress' | 'completed',
+            meetingTitle: values[4]?.replace(/^"|"$/g, '') || 'Imported',
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        addActionItems(importedItems);
+        toast.success(`Imported ${importedItems.length} items from CSV`);
+      } else {
+        // Parse JSON
+        const importedItems = JSON.parse(text) as ActionItem[];
+
+        if (!Array.isArray(importedItems)) {
+          throw new Error('Invalid JSON format');
+        }
+
+        addActionItems(importedItems);
+        toast.success(`Imported ${importedItems.length} items from JSON`);
       }
 
-      addActionItems(importedItems);
-      toast.success(`Imported ${importedItems.length} items!`);
       setViewMode('home');
-      
-      const fileInput = event.target;
-      if (fileInput) fileInput.value = '';
+
+      if (event.target) event.target.value = '';
     } catch (error) {
-      toast.error('Failed to import. Please use a valid JSON export.');
+      toast.error('Failed to import. Please use a valid JSON or CSV export from VeriAct.');
     }
   };
 
@@ -212,11 +249,10 @@ export default function DashboardClient() {
               setViewMode('home');
               setSidebarOpen(false);
             }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-              viewMode === 'home'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${viewMode === 'home'
                 ? 'bg-indigo-50 text-indigo-600'
                 : 'text-gray-700 hover:bg-gray-50'
-            }`}
+              }`}
           >
             <Home className="w-5 h-5" />
             <span className="font-medium">Action Items</span>
@@ -232,11 +268,10 @@ export default function DashboardClient() {
               setViewMode('upload');
               setSidebarOpen(false);
             }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-              viewMode === 'upload'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${viewMode === 'upload'
                 ? 'bg-indigo-50 text-indigo-600'
                 : 'text-gray-700 hover:bg-gray-50'
-            }`}
+              }`}
           >
             <Upload className="w-5 h-5" />
             <span className="font-medium">Process Transcript</span>
@@ -247,11 +282,10 @@ export default function DashboardClient() {
               setViewMode('rooms');
               setSidebarOpen(false);
             }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-              viewMode === 'rooms'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${viewMode === 'rooms'
                 ? 'bg-indigo-50 text-indigo-600'
                 : 'text-gray-700 hover:bg-gray-50'
-            }`}
+              }`}
           >
             <Users className="w-5 h-5" />
             <span className="font-medium">My Rooms</span>
@@ -266,7 +300,7 @@ export default function DashboardClient() {
             <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Quick Actions
             </p>
-            
+
             {actionItems.length > 0 && (
               <>
                 <button
@@ -441,14 +475,14 @@ export default function DashboardClient() {
                       value={meetingTitle}
                       onChange={(e) => setMeetingTitle(e.target.value)}
                       placeholder="e.g., Weekly Team Standup - Jan 15"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       disabled={isProcessing}
                     />
                   </div>
 
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-indigo-400 transition">
                     <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    
+
                     <label className="cursor-pointer inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
                       Select Transcript File
                       <input
@@ -505,7 +539,8 @@ export default function DashboardClient() {
               </motion.div>
             )}
 
-            {/* Rooms View */}
+
+            {/* Rooms List View */}
             {viewMode === 'rooms' && (
               <motion.div
                 key="rooms"
@@ -515,69 +550,59 @@ export default function DashboardClient() {
                 transition={{ duration: 0.2 }}
               >
                 <div className="mb-6">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Shared Rooms</h1>
-                  <p className="text-sm sm:text-base text-gray-600">
-                    Collaborate with your team on action items
-                  </p>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Rooms</h1>
+                  <p className="text-sm sm:text-base text-gray-600">List of rooms that you are a member of</p>
                 </div>
 
-                {loadingRooms ? (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-                    <Loader2 className="mx-auto h-12 w-12 text-indigo-600 animate-spin mb-4" />
-                    <p className="text-gray-500">Loading rooms...</p>
-                  </div>
-                ) : myRooms.length === 0 ? (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-                    <Users className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No shared rooms yet</h3>
-                    <p className="text-sm sm:text-base text-gray-600 mb-6">
-                      Create a room to collaborate with your team on action items
-                    </p>
-                    <button
-                      onClick={() => setViewMode('home')}
-                      className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-                    >
-                      View Action Items
-                    </button>
-                  </div>
+                {myRooms.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">No shared rooms yet.</p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
                     {myRooms.map((room) => (
                       <div
                         key={room.id}
-                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:border-indigo-300 transition"
+                        className="border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition cursor-pointer"
+                        onClick={() => handleOpenRoom(room.room_code)}
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between space-y-4 sm:space-y-0">
-                          <div className="flex-1">
-                            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">{room.title}</h3>
-                            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600">
-                              <span className="flex items-center">
-                                🔗 {room.room_code}
-                              </span>
-                              {mounted && (
-                                <>
-                                  <span className="flex items-center">
-                                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                                    Created {new Date(room.created_at).toLocaleDateString()}
-                                  </span>
-                                  <span className="flex items-center text-orange-600">
-                                    ⏰ Expires {new Date(room.expires_at).toLocaleDateString()}
-                                  </span>
-                                </>
-                              )}
-                            </div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-gray-900">{room.title}</h3>
+                            <p className="text-sm text-indigo-600">Code: {room.room_code}</p>
                           </div>
-                          <a
-                            href={`/dashboard/room/${room.room_code}`}
-                            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm text-center flex-shrink-0"
-                          >
-                            Open Room
-                          </a>
+                          {mounted && (
+                            <div className="flex flex-col text-xs text-gray-600 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
+                                <span className="leading-tight">Created {new Date(room.created_at).toLocaleDateString()}</span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="text-orange-600" aria-hidden>⏰</span>
+                                <span className="text-orange-600 leading-tight">Expires {new Date(room.expires_at).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </motion.div>
+            )}
+
+            {/* Room Detail View */}
+            {viewMode === 'room-view' && selectedRoomCode && (
+              <motion.div
+                key="room-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <RoomView
+                  roomCode={selectedRoomCode}
+                  onBack={() => setViewMode('rooms')}
+                />
               </motion.div>
             )}
           </AnimatePresence>
