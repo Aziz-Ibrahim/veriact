@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Share2, Calendar, CheckCircle, PlayCircle, Clock, ArrowLeft, Loader2 } from 'lucide-react';
+import { Share2, Calendar, CheckCircle, PlayCircle, Clock, ArrowLeft, Loader2, UserPlus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import InviteMemberModal from './InviteMemberModal';
 
 interface RoomViewProps {
   roomCode: string;
@@ -15,6 +16,10 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [members, setMembers] = useState<any[]>([]);
+  const [showMembers, setShowMembers] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -24,11 +29,28 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
   const loadRoom = async () => {
     setLoading(true);
     try {
+      // Check access first
+      const accessRes = await fetch(`/api/rooms/${roomCode}/check-access`);
+      const accessData = await accessRes.json();
+      
+      if (!accessData.hasAccess) {
+        toast.error(accessData.error || 'Access denied');
+        onBack();
+        return;
+      }
+
+      setIsOwner(accessData.isOwner || false);
+
       const res = await fetch(`/api/rooms/${roomCode}`);
       const data = await res.json();
       if (data.success) {
         setRoom(data.room);
         setActionItems(data.actionItems);
+        
+        // Load members if owner
+        if (accessData.isOwner) {
+          loadMembers();
+        }
       } else {
         toast.error('Room not found');
         onBack();
@@ -38,6 +60,18 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
       onBack();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMembers = async () => {
+    try {
+      const res = await fetch(`/api/rooms/${roomCode}/members`);
+      const data = await res.json();
+      if (data.success) {
+        setMembers(data.members);
+      }
+    } catch (error) {
+      console.error('Failed to load members:', error);
     }
   };
 
@@ -91,6 +125,11 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
     toast.success('Link copied');
   };
 
+  const handleInviteClose = () => {
+    setShowInviteModal(false);
+    loadMembers(); // Refresh members list after invite
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -141,22 +180,42 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{room.title}</h1>
             <p className="text-sm text-gray-500">Room: {room.room_code}</p>
           </div>
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center justify-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
-          >
-            {copied ? (
+          <div className="flex items-center gap-2">
+            {isOwner && (
               <>
-                <CheckCircle className="w-4 h-4" />
-                <span>Copied!</span>
-              </>
-            ) : (
-              <>
-                <Share2 className="w-4 h-4" />
-                <span>Share Link</span>
+                <button
+                  onClick={() => setShowMembers(!showMembers)}
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>{members.length}</span>
+                </button>
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Invite</span>
+                </button>
               </>
             )}
-          </button>
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center justify-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+            >
+              {copied ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4" />
+                  <span>Share</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -172,6 +231,32 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
         </div>
       </div>
 
+      {/* Members List */}
+      {isOwner && showMembers && members.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Room Members ({members.length})</h2>
+          <div className="space-y-2">
+            {members.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">{member.user_email}</p>
+                  <p className="text-xs text-gray-500">
+                    Invited {new Date(member.invited_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <span className="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded">
+                  {member.access_level}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Action Items */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold mb-4">Action Items ({actionItems.length})</h2>
         
@@ -217,6 +302,13 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
           </div>
         )}
       </div>
+
+      {/* Invite Modal */}
+      <InviteMemberModal
+        isOpen={showInviteModal}
+        onClose={handleInviteClose}
+        roomCode={roomCode}
+      />
     </div>
   );
 }

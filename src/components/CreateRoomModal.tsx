@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Users, Shield, Calendar, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { X, Users, Shield, Calendar, Link as LinkIcon, Loader2, UserPlus, Mail, Trash2, Check } from 'lucide-react';
 import { ActionItem } from '@/types';
+import toast from 'react-hot-toast';
 
 interface CreateRoomModalProps {
   isOpen: boolean;
@@ -10,6 +11,13 @@ interface CreateRoomModalProps {
   actionItems: ActionItem[];
   meetingTitle: string;
   onRoomCreated?: () => void;
+}
+
+interface InviteEntry {
+  id: string;
+  email: string;
+  accessLevel: 'viewer' | 'editor';
+  status: 'pending' | 'sending' | 'sent' | 'error';
 }
 
 export default function CreateRoomModal({
@@ -26,6 +34,12 @@ export default function CreateRoomModal({
     roomCode: string;
     link: string;
   } | null>(null);
+  
+  // Invite state
+  const [showInviteSection, setShowInviteSection] = useState(false);
+  const [invites, setInvites] = useState<InviteEntry[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [newAccessLevel, setNewAccessLevel] = useState<'viewer' | 'editor'>('editor');
 
   if (!isOpen) return null;
 
@@ -74,9 +88,93 @@ export default function CreateRoomModal({
     }
   };
 
+  const handleAddInvite = () => {
+    const email = newEmail.trim().toLowerCase();
+    
+    if (!email) {
+      toast.error('Please enter an email address');
+      return;
+    }
+
+    // Basic email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    // Check for duplicates
+    if (invites.some(inv => inv.email === email)) {
+      toast.error('This email is already in the invite list');
+      return;
+    }
+
+    setInvites([
+      ...invites,
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        email,
+        accessLevel: newAccessLevel,
+        status: 'pending',
+      },
+    ]);
+
+    setNewEmail('');
+    toast.success('Added to invite list');
+  };
+
+  const handleRemoveInvite = (id: string) => {
+    setInvites(invites.filter(inv => inv.id !== id));
+  };
+
+  const handleSendInvites = async () => {
+    if (!roomCreated || invites.length === 0) return;
+
+    // Update all to sending
+    setInvites(prev => prev.map(inv => ({ ...inv, status: 'sending' as const })));
+
+    for (const invite of invites) {
+      try {
+        const res = await fetch(`/api/rooms/${roomCreated.roomCode}/invite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: invite.email,
+            accessLevel: invite.accessLevel,
+          }),
+        });
+
+        if (res.ok) {
+          setInvites(prev =>
+            prev.map(inv =>
+              inv.id === invite.id ? { ...inv, status: 'sent' as const } : inv
+            )
+          );
+        } else {
+          setInvites(prev =>
+            prev.map(inv =>
+              inv.id === invite.id ? { ...inv, status: 'error' as const } : inv
+            )
+          );
+        }
+      } catch (error) {
+        setInvites(prev =>
+          prev.map(inv =>
+            inv.id === invite.id ? { ...inv, status: 'error' as const } : inv
+          )
+        );
+      }
+    }
+
+    const successCount = invites.filter(inv => inv.status === 'sent').length;
+    if (successCount > 0) {
+      toast.success(`${successCount} invitation(s) sent successfully!`);
+    }
+  };
+
   const handleCopyLink = () => {
     if (roomCreated) {
       navigator.clipboard.writeText(roomCreated.link);
+      toast.success('Link copied to clipboard!');
     }
   };
 
@@ -85,8 +183,14 @@ export default function CreateRoomModal({
     setAgreedToPrivacy(false);
     setError(null);
     setRoomCreated(null);
+    setShowInviteSection(false);
+    setInvites([]);
+    setNewEmail('');
+    setNewAccessLevel('editor');
     onClose();
   };
+
+  const allInvitesSent = invites.length > 0 && invites.every(inv => inv.status === 'sent');
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -102,7 +206,7 @@ export default function CreateRoomModal({
                 {roomCreated ? 'Room Created!' : 'Create Shared Room'}
               </h2>
               <p className="text-sm text-gray-500">
-                {roomCreated ? 'Share this link with your team' : 'Share action items with your team'}
+                {roomCreated ? 'Share and invite team members' : 'Share action items with your team'}
               </p>
             </div>
           </div>
@@ -158,7 +262,7 @@ export default function CreateRoomModal({
                     <h4 className="font-semibold mb-2">Privacy & Data Storage Notice</h4>
                     <ul className="space-y-1 list-disc list-inside">
                       <li>Action items will be stored on our secure servers to enable team collaboration</li>
-                      <li>Anyone with the room link can view and edit action items</li>
+                      <li>Only invited members can view and edit action items</li>
                       <li>The original meeting transcript is NOT stored or shared</li>
                       <li>Rooms automatically expire after 90 days</li>
                       <li>You can delete the room anytime from your dashboard</li>
@@ -221,17 +325,19 @@ export default function CreateRoomModal({
           ) : (
             <>
               {/* Success View */}
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-8 h-8 text-green-600" />
+              <div className="py-6">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Users className="w-8 h-8 text-green-600" />
+                  </div>
+                  
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Room Created Successfully!
+                  </h3>
+                  <p className="text-gray-600">
+                    Share this link or invite team members
+                  </p>
                 </div>
-                
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Room Created Successfully!
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  Share this link with your team members
-                </p>
 
                 {/* Room Code Display */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-4">
@@ -247,29 +353,132 @@ export default function CreateRoomModal({
                     <p className="text-sm font-medium text-indigo-900">Shareable Link</p>
                     <button
                       onClick={handleCopyLink}
-                      className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                      className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 transition flex items-center space-x-1"
                     >
-                      Copy Link
+                      <LinkIcon className="w-3 h-3" />
+                      <span>Copy</span>
                     </button>
                   </div>
-                  <p className="text-sm text-indigo-700 break-all font-mono">
+                  <p className="text-xs text-indigo-700 break-all font-mono bg-white p-2 rounded">
                     {roomCreated.link}
                   </p>
+                </div>
+
+                {/* Invite Section Toggle */}
+                <div className="border-t border-gray-200 pt-6 mb-6">
+                  <button
+                    onClick={() => setShowInviteSection(!showInviteSection)}
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <UserPlus className="w-5 h-5 text-gray-600" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-900">Invite Team Members</p>
+                        <p className="text-xs text-gray-500">
+                          {invites.length > 0 ? `${invites.length} invite(s) ready` : 'Add people who can access this room'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-gray-400">{showInviteSection ? '−' : '+'}</span>
+                  </button>
+
+                  {showInviteSection && (
+                    <div className="mt-4 p-4 border border-gray-200 rounded-lg">
+                      {/* Add Invite Form */}
+                      <div className="flex gap-2 mb-4">
+                        <input
+                          type="email"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddInvite()}
+                          placeholder="colleague@company.com"
+                          className="flex-1 px-3 py-2 text-sm text-indigo-600 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                        <select
+                          value={newAccessLevel}
+                          onChange={(e) => setNewAccessLevel(e.target.value as 'viewer' | 'editor')}
+                          className="px-3 py-2 text-sm border text-indigo-600 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="editor">Editor</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        <button
+                          onClick={handleAddInvite}
+                          className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition whitespace-nowrap"
+                        >
+                          Add
+                        </button>
+                      </div>
+
+                      {/* Invite List */}
+                      {invites.length > 0 && (
+                        <div className="space-y-2 mb-4">
+                          {invites.map((invite) => (
+                            <div
+                              key={invite.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                            >
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {invite.email}
+                                  </p>
+                                  <p className="text-xs text-gray-500">{invite.accessLevel}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                {invite.status === 'sending' && (
+                                  <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
+                                )}
+                                {invite.status === 'sent' && (
+                                  <Check className="w-4 h-4 text-green-600" />
+                                )}
+                                {invite.status === 'error' && (
+                                  <X className="w-4 h-4 text-red-600" />
+                                )}
+                                {invite.status === 'pending' && (
+                                  <button
+                                    onClick={() => handleRemoveInvite(invite.id)}
+                                    className="text-gray-400 hover:text-red-600 transition"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Send Invites Button */}
+                      {invites.length > 0 && !allInvitesSent && (
+                        <button
+                          onClick={handleSendInvites}
+                          disabled={invites.some(inv => inv.status === 'sending')}
+                          className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:bg-gray-400 flex items-center justify-center space-x-2"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>Send {invites.length} Invitation(s)</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Features */}
                 <div className="grid grid-cols-3 gap-4 mb-6 text-sm">
                   <div className="text-center">
                     <Calendar className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600">Expires in 90 days</p>
+                    <p className="text-gray-600">90 days</p>
+                  </div>
+                  <div className="text-center">
+                    <Shield className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-600">Invite-only</p>
                   </div>
                   <div className="text-center">
                     <Users className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600">Unlimited members</p>
-                  </div>
-                  <div className="text-center">
-                    <LinkIcon className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600">Link-based access</p>
+                    <p className="text-gray-600">Team access</p>
                   </div>
                 </div>
 
