@@ -117,12 +117,11 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
     }
   };
 
-  const handleCopyLink = () => {
-    const link = `${window.location.origin}/room/${roomCode}`;
-    navigator.clipboard.writeText(link);
+  const handleCopyRoomCode = () => {
+    navigator.clipboard.writeText(room.room_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast.success('Link copied');
+    toast.success('Room code copied');
   };
 
   const handleInviteClose = () => {
@@ -200,7 +199,7 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
               </>
             )}
             <button
-              onClick={handleCopyLink}
+              onClick={handleCopyRoomCode}
               className="flex items-center justify-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
             >
               {copied ? (
@@ -211,7 +210,7 @@ export default function RoomView({ roomCode, onBack }: RoomViewProps) {
               ) : (
                 <>
                   <Share2 className="w-4 h-4" />
-                  <span>Share</span>
+                  <span>Copy Room Code</span>
                 </>
               )}
             </button>

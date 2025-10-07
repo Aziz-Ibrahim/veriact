@@ -7,6 +7,7 @@ import { useExtractActions } from '@/hooks/useExtractActions';
 import { FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield, Calendar, Menu, X } from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import CreateRoomModal from './CreateRoomModal';
+import JoinRoomModal from './JoinRoomModal';
 import RoomView from './RoomView';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,6 +36,8 @@ export default function DashboardClient() {
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedRoomCode, setSelectedRoomCode] = useState<string | null>(null);
+  const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -58,6 +61,25 @@ export default function DashboardClient() {
       console.error('Failed to load rooms:', err);
     } finally {
       setLoadingRooms(false);
+    }
+  };
+
+  const handleJoinRoom = async () => {
+    if (!joinCode.trim()) return;
+    try {
+      const res = await fetch(`/api/rooms/${joinCode}/check-access`);
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Access granted!');
+        setViewMode('room-view');
+        setSelectedRoomCode(joinCode);
+      } else {
+        toast.error('Invalid or unauthorized room code');
+      }
+    } catch {
+      toast.error('Failed to verify room access');
+    } finally {
+      setJoinCode('');
     }
   };
 
@@ -539,7 +561,6 @@ export default function DashboardClient() {
               </motion.div>
             )}
 
-
             {/* Rooms List View */}
             {viewMode === 'rooms' && (
               <motion.div
@@ -553,6 +574,16 @@ export default function DashboardClient() {
                   <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Rooms</h1>
                   <p className="text-sm sm:text-base text-gray-600">List of rooms that you are a member of</p>
                 </div>
+
+                <div className="flex justify-end mb-6">
+                  <button
+                    onClick={() => setShowJoinRoomModal(true)}
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                  >
+                    Join Room
+                  </button>
+                </div>
+
 
                 {myRooms.length === 0 ? (
                   <p className="text-center text-gray-500 py-8">No shared rooms yet.</p>
@@ -617,6 +648,17 @@ export default function DashboardClient() {
         meetingTitle={lastMeetingTitle}
         onRoomCreated={handleRoomCreated}
       />
+
+      {/* Join Room Modal */}
+      <JoinRoomModal
+        isOpen={showJoinRoomModal}
+        onClose={() => setShowJoinRoomModal(false)}
+        onJoin={(code) => {
+          setSelectedRoomCode(code);
+          setViewMode('room-view');
+        }}
+      />
+
     </div>
   );
 }

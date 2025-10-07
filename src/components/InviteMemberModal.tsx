@@ -51,7 +51,7 @@ export default function InviteMemberModal({ isOpen, onClose, roomCode }: InviteM
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl max-w-md w-full p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Invite Member</h2>
+          <h2 className="text-xl text-gray-700 font-semibold">Invite Member</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
@@ -76,7 +76,7 @@ export default function InviteMemberModal({ isOpen, onClose, roomCode }: InviteM
               Access Level
             </label>
             <div className="space-y-2">
-              <label className="flex items-center space-x-2 cursor-pointer">
+              <label className="flex text-gray-700 items-center space-x-2 cursor-pointer">
                 <input
                   type="radio"
                   checked={accessLevel === 'editor'}
@@ -96,7 +96,7 @@ export default function InviteMemberModal({ isOpen, onClose, roomCode }: InviteM
                   className="text-indigo-600"
                 />
                 <div>
-                  <p className="font-medium text-sm">Viewer</p>
+                  <p className="font-medium text-gray-700 text-sm">Viewer</p>
                   <p className="text-xs text-gray-500">Can only view action items</p>
                 </div>
               </label>

@@ -63,12 +63,11 @@ export default function DashboardRoomClient({ room, initialActionItems }: Dashbo
     }
   };
 
-  const handleCopyLink = () => {
-    const link = `${window.location.origin}/room/${room.room_code}`;
-    navigator.clipboard.writeText(link);
+  const handleCopyRoomCode = () => {
+    navigator.clipboard.writeText(room.room_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast.success('Link copied to clipboard');
+    toast.success('Room code copied');
   };
 
   const getStatusIcon = (status: string) => {
@@ -121,7 +120,7 @@ export default function DashboardRoomClient({ room, initialActionItems }: Dashbo
             <p className="text-sm text-gray-500">Room Code: {room.room_code}</p>
           </div>
           <button
-            onClick={handleCopyLink}
+            onClick={handleCopyRoomCode}
             className="flex items-center justify-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
           >
             {copied ? (
@@ -132,7 +131,7 @@ export default function DashboardRoomClient({ room, initialActionItems }: Dashbo
             ) : (
               <>
                 <Share2 className="w-4 h-4" />
-                <span>Copy Share Link</span>
+                <span>Copy Room Code</span>
               </>
             )}
           </button>
