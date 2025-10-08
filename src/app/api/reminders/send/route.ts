@@ -1,9 +1,10 @@
+// src/app/api/reminders/send/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generateReminderEmail } from '@/lib/email-templates';
 
 // Security: Only allow requests with correct authorization
-const CRON_SECRET = process.env.CRON_SECRET || 'supersecretcronkey';
+const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,17 +71,36 @@ export async function POST(request: NextRequest) {
           { user_email: room.created_by_email, access_level: 'owner' }
         ];
 
-        console.log(`📧 Sending to ${allRecipients.length} members in ${room.room_code}`);
+        // In development, filter to only verified email to avoid Resend restrictions
+        let recipientsToEmail = allRecipients;
+        
+        if (process.env.NODE_ENV === 'development') {
+          const verifiedEmail = process.env.RESEND_TEST_EMAIL; // Your verified email
+          if (verifiedEmail) {
+            recipientsToEmail = allRecipients.filter(m => m.user_email === verifiedEmail);
+            console.log(`🔧 Development mode: Only sending to verified email (${verifiedEmail})`);
+          }
+        }
+
+        console.log(`📧 Sending to ${recipientsToEmail.length} members in ${room.room_code}`);
 
         // Send email to ALL room members (everyone sees all action items)
-        for (const member of allRecipients) {
+        for (const member of recipientsToEmail) {
           try {
+            // Safety check for user_email
+            if (!member.user_email) {
+              console.log('⏭️  Skipping member with no email');
+              continue;
+            }
 
             // Generate email content (all action items in the room)
             const roomLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard?room=${room.room_code}`;
             
+            // Safe username extraction
+            const userName = member.user_email?.split('@')[0] || 'Team Member';
+            
             const { subject, html, text } = generateReminderEmail({
-              userName: member.user_email.split('@')[0], // Use email username
+              userName,
               roomTitle: room.title,
               roomCode: room.room_code,
               actionItems: actionItems, // Send ALL items, not just member's items

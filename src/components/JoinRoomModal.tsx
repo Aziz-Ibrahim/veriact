@@ -91,7 +91,7 @@ export default function JoinRoomModal({ isOpen, onClose, onJoin }: JoinRoomModal
             onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
             onKeyPress={handleKeyPress}
             placeholder="ROOM-XXXXXXX"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+            className="w-full px-4 py-2.5 text-indigo-600 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
             autoFocus
           />
           <p className="text-xs text-gray-500 mt-1">

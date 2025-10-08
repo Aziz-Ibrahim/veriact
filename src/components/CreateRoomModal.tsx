@@ -347,23 +347,6 @@ export default function CreateRoomModal({
                   </p>
                 </div>
 
-                {/* Shareable Link */}
-                <div className="bg-indigo-50 rounded-lg p-4 mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium text-indigo-900">Shareable Link</p>
-                    <button
-                      onClick={handleCopyLink}
-                      className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 transition flex items-center space-x-1"
-                    >
-                      <LinkIcon className="w-3 h-3" />
-                      <span>Copy</span>
-                    </button>
-                  </div>
-                  <p className="text-xs text-indigo-700 break-all font-mono bg-white p-2 rounded">
-                    {roomCreated.link}
-                  </p>
-                </div>
-
                 {/* Invite Section Toggle */}
                 <div className="border-t border-gray-200 pt-6 mb-6">
                   <button

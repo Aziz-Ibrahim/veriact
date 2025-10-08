@@ -30,6 +30,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userEmail = user.emailAddresses[0]?.emailAddress;
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: 'User email not found' },
+        { status: 400 }
+      );
+    }
+
     // Generate unique room code
     const { data: roomCodeData, error: roomCodeError } = await supabase
       .rpc('generate_room_code');
@@ -56,6 +64,23 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to create room');
     }
 
+    // Auto-add room creator as a member (with editor access)
+    const { error: memberError } = await supabase
+      .from('room_members')
+      .insert({
+        room_id: room.id,
+        user_email: userEmail,
+        invited_by: user.id,
+        access_level: 'editor',
+      });
+
+    if (memberError) {
+      console.error('Failed to add creator as member:', memberError);
+      // Rollback: delete the room if adding creator fails
+      await supabase.from('rooms').delete().eq('id', room.id);
+      throw new Error('Failed to add creator as member');
+    }
+
     // Insert action items
     const roomActionItems = actionItems.map((item: any) => ({
       room_id: room.id,
@@ -72,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     if (itemsError) {
       console.error('Action items insertion error:', itemsError);
-      // Rollback: delete the room
+      // Rollback: delete the room and member
       await supabase.from('rooms').delete().eq('id', room.id);
       throw new Error('Failed to create action items');
     }
