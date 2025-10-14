@@ -38,29 +38,8 @@ export default function SubscriptionCard() {
   };
 
   const handleUpgrade = async (plan: 'pro' | 'enterprise') => {
-    setUpgrading(true);
-    try {
-      const res = await fetch('/api/stripe/create-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          plan,
-          organizationId: subscription?.organizationId 
-        }),
-      });
-
-      const data = await res.json();
-      
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        toast.error('Failed to create checkout session');
-      }
-    } catch (error) {
-      toast.error('Failed to upgrade');
-    } finally {
-      setUpgrading(false);
-    }
+    // Redirect to checkout page
+    window.location.href = `/checkout?plan=${plan}`;
   };
 
   if (loading) {
