@@ -213,7 +213,7 @@ function CreateOrgModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Acme Inc."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-indigo-600"
             />
           </div>
 
@@ -226,7 +226,7 @@ function CreateOrgModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="company.com"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-indigo-600"
             />
             <p className="text-xs text-gray-500 mt-1">
               If set, only users with this email domain can join
@@ -309,7 +309,7 @@ function JoinOrgModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             value={token}
             onChange={(e) => setToken(e.target.value.toUpperCase())}
             placeholder="ORG-XXXXXXXXXXXX"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-indigo-600"
           />
           <p className="text-xs text-gray-500 mt-1">
             Ask your organization owner for the token

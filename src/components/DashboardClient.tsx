@@ -1,10 +1,11 @@
 'use client';
 
-import { UserButton } from '@clerk/nextjs';
 import { useStore } from '@/store/useStore';
 import { useState, useEffect } from 'react';
 import { useExtractActions } from '@/hooks/useExtractActions';
-import { FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield, Calendar, Menu, X } from 'lucide-react';
+import {
+  FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield,
+  Calendar, Menu, X, Settings } from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
@@ -12,6 +13,7 @@ import RoomView from './RoomView';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem } from '@/types';
+import Link from 'next/link';
 
 interface Room {
   id: string;
@@ -377,7 +379,14 @@ export default function DashboardClient() {
 
         {/* User Profile */}
         <div className="p-4 border-t border-gray-200">
-          <UserButton afterSignOutUrl="/" />
+          <Link
+            href="/profile"
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <Settings className="w-5 h-5" />
+            <span className="font-medium">Account Settings</span>
+          </Link>
         </div>
       </aside>
 
@@ -397,7 +406,12 @@ export default function DashboardClient() {
             </div>
             <span className="text-lg font-bold text-gray-900">VeriAct</span>
           </div>
-          <UserButton afterSignOutUrl="/" />
+          <Link 
+            href="/profile" 
+            className="text-gray-700 hover:text-gray-900"
+          >
+            <Settings className="w-6 h-6" />
+          </Link>
         </div>
 
         <div className="max-w-6xl mx-auto p-4 sm:p-8">
