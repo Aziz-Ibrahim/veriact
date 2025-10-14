@@ -141,7 +141,8 @@ export default function App() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-12 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto"> 
+            
             {/* Free Tier */}
             <motion.div
               initial={{ opacity: 0, x: -30 }}
@@ -186,11 +187,12 @@ export default function App() {
               </div>
             </motion.div>
 
-            {/* Paid Tier */}
+            {/* Pro Plan Card (Collaboration) */}
             <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
               className="bg-gradient-to-br from-purple-50 to-indigo-50 p-8 rounded-2xl border-2 border-purple-300 relative overflow-hidden"
             >
               <div className="absolute top-4 right-4">
@@ -235,6 +237,58 @@ export default function App() {
                 </p>
               </div>
             </motion.div>
+
+            {/* Enterprise Plan Card (Automation) */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="bg-gradient-to-br from-gray-50 to-gray-200 p-8 rounded-2xl border-2 border-yellow-400 relative overflow-hidden"
+            >
+              <div className="absolute top-4 right-4">
+                <span className="px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 text-xs font-bold rounded-full">
+                  🚀 AUTOMATION
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Enterprise Plan</h3>
+                <span className="px-3 py-1 bg-yellow-100 text-gray-900 text-sm font-semibold rounded-full">
+                  Meeting Bot
+                </span>
+              </div>
+              
+              <ol className="space-y-4 mb-6">
+                <li className="flex items-start space-x-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                  <span className="text-gray-700">Invite VeriAct Bot to Zoom/Meet</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                  <span className="text-gray-700">Bot joins, records, and transcribes</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+                  <span className="text-gray-700">AI instantly extracts action items</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
+                  <span className="text-gray-700">Room created automatically – **No manual uploads**</span>
+                </li>
+              </ol>
+
+              <div className="bg-white p-4 rounded-lg border border-yellow-300">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Zap className="w-5 h-5 text-yellow-600" />
+                  <span className="font-semibold text-gray-900">Full Automation</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Transcripts are processed in real-time, then discarded. Action items are saved securely for your team.
+                </p>
+              </div>
+            </motion.div>
+
           </div>
         </div>
       </section>
