@@ -30,7 +30,7 @@ export default function ProfilePage() {
                 elements: {
                   rootBox: 'w-full',
                   card: 'shadow-none border-none w-full',
-                  page: 'p-4 sm:p-6 w-full',
+                  page: 'p-4 sm:p-6 w-inherit',
                 },
               }}
             />
