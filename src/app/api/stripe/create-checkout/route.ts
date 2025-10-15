@@ -21,6 +21,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
+    if (plan === 'enterprise') {
+      if (!organizationId) {
+        return NextResponse.json({ error: 'Organization ID required for Enterprise' }, { status: 400 });
+      }
+    }
+
     const userEmail = user.emailAddresses[0]?.emailAddress;
     if (!userEmail) {
       return NextResponse.json({ error: 'User email not found' }, { status: 400 });

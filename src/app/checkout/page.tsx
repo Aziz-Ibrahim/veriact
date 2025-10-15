@@ -1,17 +1,101 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { Loader2, CheckCircle, Crown, Rocket, ArrowLeft } from 'lucide-react';
+import { Loader2, CheckCircle, Crown, Rocket, ArrowLeft, Users, Plus } from 'lucide-react'; 
 import toast from 'react-hot-toast';
+
+// Define the organization type
+interface Organization {
+  id: string;
+  name: string;
+  role: string;
+}
+
+// Inline Organization Creation Component
+interface CreateOrganizationFormProps {
+    onCreateSuccess: (orgId: string) => void;
+}
+
+function CreateOrganizationForm({ onCreateSuccess }: CreateOrganizationFormProps) {
+    const [orgName, setOrgName] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+
+    const handleCreate = async () => {
+        if (!orgName.trim()) {
+            toast.error('Please enter an organization name.');
+            return;
+        }
+
+        setIsCreating(true);
+        try {
+            const res = await fetch('/api/organizations/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ organizationName: orgName }),
+            });
+            const data = await res.json();
+
+            if (data.success && data.organization?.id) {
+                toast.success('Organization created! You can now proceed to payment.');
+                onCreateSuccess(data.organization.id);
+            } else {
+                toast.error(data.error || 'Failed to create organization. Please try again.');
+            }
+        } catch (error) {
+            toast.error('Network error during organization creation.');
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <p className='text-sm text-gray-700 font-medium'>
+                Before subscribing to Enterprise, you must create your primary organization.
+            </p>
+            <div>
+                <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Organization Name
+                </label>
+                <input
+                    id="org-name"
+                    type="text"
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    placeholder="e.g., VeriAct Solutions Ltd."
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-700"
+                />
+            </div>
+            <button
+                onClick={handleCreate}
+                disabled={isCreating || !orgName.trim()}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition disabled:opacity-50"
+            >
+                {isCreating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                    <Plus className="w-4 h-4" />
+                )}
+                <span>{isCreating ? 'Creating...' : 'Create Organization & Continue'}</span>
+            </button>
+        </div>
+    );
+}
+
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname(); 
   const { user, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<'pro' | 'enterprise' | null>(null);
+  
+  const [ownedOrganizations, setOwnedOrganizations] = useState<Organization[]>([]);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
+  const [loadingOrgs, setLoadingOrgs] = useState(false);
 
   useEffect(() => {
     const planParam = searchParams.get('plan') as 'pro' | 'enterprise';
@@ -21,30 +105,74 @@ function CheckoutContent() {
       toast.error('Invalid plan selected');
       router.push('/dashboard');
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   useEffect(() => {
-    // Check for success/cancelled params
     const success = searchParams.get('success');
     const cancelled = searchParams.get('cancelled');
 
     if (success === 'true') {
       toast.success('Subscription activated! 🎉');
+      router.replace(pathname); 
       setTimeout(() => router.push('/dashboard'), 2000);
     } else if (cancelled === 'true') {
       toast.error('Checkout cancelled');
+      router.replace(pathname); 
     }
-  }, [searchParams]);
+  }, [searchParams, router, pathname]);
+
+
+  useEffect(() => {
+    // Only load organizations if the user is checking out for Enterprise
+    if (user && plan === 'enterprise' && isLoaded) {
+        loadOwnedOrganizations();
+    }
+  }, [user, plan, isLoaded]);
+
+  const loadOwnedOrganizations = async () => {
+    setLoadingOrgs(true);
+    try {
+        const res = await fetch('/api/organizations/list'); 
+        const data = await res.json();
+        
+        if (data.organizations) {
+            // Filter to only include organizations where the user is the owner
+            const owned = data.organizations.filter((org: Organization) => org.role === 'owner');
+            setOwnedOrganizations(owned);
+            if (owned.length === 1) {
+                setSelectedOrganizationId(owned[0].id);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load owned organizations:', error);
+        toast.error('Failed to load your organizations.');
+    } finally {
+        setLoadingOrgs(false);
+    }
+  };
+
+  const handleOrganizationCreated = (orgId: string) => {
+      setSelectedOrganizationId(orgId); 
+      setOwnedOrganizations(prev => [...prev, { id: orgId, name: 'Newly Created', role: 'owner' }]);
+  }
 
   const handleCheckout = async () => {
     if (!user || !plan) return;
+
+    if (plan === 'enterprise' && !selectedOrganizationId) {
+        toast.error('Please create or select an organization to proceed.');
+        return;
+    }
 
     setLoading(true);
     try {
       const res = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ 
+            plan,
+            organizationId: plan === 'enterprise' ? selectedOrganizationId : undefined,
+        }),
       });
 
       const data = await res.json();
@@ -100,6 +228,8 @@ function CheckoutContent() {
     ],
   };
 
+  const isCheckoutDisabled = plan === 'enterprise' && !selectedOrganizationId;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
       <div className="max-w-2xl mx-auto">
@@ -138,6 +268,52 @@ function CheckoutContent() {
               <p className="text-sm text-gray-600">Cancel anytime, no commitment</p>
             </div>
 
+            {/* --- ENTERPRISE SELECTION/CREATION BLOCK --- */}
+            {plan === 'enterprise' && (
+                <div className="mb-8 p-6 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center space-x-2 border-b pb-2 text-lg">
+                        <Users className="w-5 h-5 text-yellow-700" />
+                        <span>Team Setup: Organization Required</span>
+                    </h3>
+                    
+                    {loadingOrgs ? (
+                        <div className="flex items-center space-x-2 text-yellow-700 justify-center py-4">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>Loading existing organizations...</span>
+                        </div>
+                    ) : ownedOrganizations.length > 0 ? (
+                        // CASE 1: Organizations EXIST - User must select one
+                        <>
+                            <p className='text-sm text-gray-700 mb-2'>
+                                Select the organization you own to apply the Enterprise subscription to.
+                            </p>
+                            <label htmlFor="org-select" className="sr-only">
+                                Select Organization to Subscribe
+                            </label>
+                            <select
+                                id="org-select"
+                                value={selectedOrganizationId || ''}
+                                onChange={(e) => setSelectedOrganizationId(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-700"
+                            >
+                                <option value="" disabled>Select an Organization</option>
+                                {ownedOrganizations.map((org) => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                ))}
+                            </select>
+                            {selectedOrganizationId && (
+                                <p className="text-xs text-green-700 mt-2 flex items-center space-x-1">
+                                    <CheckCircle className='w-4 h-4'/> <span>Ready to proceed!</span>
+                                </p>
+                            )}
+                        </>
+                    ) : (
+                        // CASE 2: NO Organizations EXIST - User must create one
+                        <CreateOrganizationForm onCreateSuccess={handleOrganizationCreated} />
+                    )}
+                </div>
+            )}
+
             {/* Features */}
             <div className="mb-8">
               <h3 className="font-semibold text-gray-900 mb-4">What's included:</h3>
@@ -165,7 +341,7 @@ function CheckoutContent() {
             {/* Checkout Button */}
             <button
               onClick={handleCheckout}
-              disabled={loading}
+              disabled={loading || isCheckoutDisabled}
               className={`w-full py-4 bg-gradient-to-r ${planDetails.gradient} text-white rounded-lg hover:opacity-90 transition font-bold text-lg disabled:opacity-50 flex items-center justify-center space-x-2`}
             >
               {loading ? (
