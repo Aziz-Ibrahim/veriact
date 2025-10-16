@@ -1,7 +1,7 @@
+// src/app/api/webhooks/stripe/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-09-30.clover' as any,
@@ -9,23 +9,44 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
+// Use service role key for admin operations (bypasses RLS)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.text();
-    const headersList = await headers();
-    const signature = headersList.get('stripe-signature');
-
-    if (!signature) {
-      return NextResponse.json({ error: 'No signature' }, { status: 400 });
-    }
-
-    // Verify webhook signature
     let event: Stripe.Event;
-    try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    } catch (err) {
-      console.error('⚠️ Webhook signature verification failed:', err);
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+
+    // In development, skip signature verification if using Stripe CLI
+    if (process.env.NODE_ENV === 'development' && process.env.SKIP_STRIPE_SIGNATURE === 'true') {
+      const body = await request.json();
+      event = body as Stripe.Event;
+      console.log('🔧 Dev mode: Skipping signature verification');
+    } else {
+      // Production: Verify signature
+      const buf = await request.arrayBuffer();
+      const body = Buffer.from(buf).toString('utf8');
+      const signature = request.headers.get('stripe-signature');
+
+      if (!signature) {
+        console.error('❌ No signature header');
+        return NextResponse.json({ error: 'No signature' }, { status: 400 });
+      }
+
+      try {
+        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      } catch (err) {
+        console.error('⚠️ Webhook signature verification failed:', err);
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+      }
     }
 
     console.log('✅ Stripe webhook received:', event.type);
@@ -85,45 +106,71 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   // Get subscription details
   const subscriptionId = session.subscription as string;
-  const subscriptionResponse = await stripe.subscriptions.retrieve(subscriptionId);
+  
+  if (!subscriptionId) {
+    console.error('No subscription ID in session');
+    return;
+  }
 
-  // Update or create subscription in database
-  if (organizationId && organizationId !== '') {
-    // Enterprise subscription
-    await supabase
-      .from('subscriptions')
-      .upsert({
-        organization_id: organizationId,
-        plan,
-        status: subscriptionResponse.status,
-        stripe_customer_id: session.customer as string,
-        stripe_subscription_id: subscriptionId,
-        current_period_start: new Date((subscriptionResponse as any).current_period_start * 1000).toISOString(),
-        current_period_end: new Date((subscriptionResponse as any).current_period_end * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'organization_id'
-      });
+  try {
+    const subscription: any = await stripe.subscriptions.retrieve(subscriptionId);
 
-    console.log('✅ Enterprise subscription created for org:', organizationId);
-  } else if (userId && userId !== '') {
-    // Pro subscription
-    await supabase
-      .from('subscriptions')
-      .upsert({
-        user_id: userId,
-        plan,
-        status: subscriptionResponse.status,
-        stripe_customer_id: session.customer as string,
-        stripe_subscription_id: subscriptionId,
-        current_period_start: new Date((subscriptionResponse as any).current_period_start * 1000).toISOString(),
-        current_period_end: new Date((subscriptionResponse as any).current_period_end * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id'
-      });
+    const periodStart = subscription.current_period_start 
+      ? new Date(subscription.current_period_start * 1000).toISOString()
+      : new Date().toISOString();
+    
+    const periodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString()
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // +30 days
 
-    console.log('✅ Pro subscription created for user:', userId);
+    // Update or create subscription in database
+    if (organizationId && organizationId !== '') {
+      // Enterprise subscription
+      const { error } = await supabase
+        .from('subscriptions')
+        .upsert({
+          organization_id: organizationId,
+          plan,
+          status: subscription.status,
+          stripe_customer_id: session.customer as string,
+          stripe_subscription_id: subscriptionId,
+          current_period_start: periodStart,
+          current_period_end: periodEnd,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'organization_id'
+        });
+
+      if (error) {
+        console.error('Database error (org):', error);
+      } else {
+        console.log('✅ Enterprise subscription created for org:', organizationId);
+      }
+    } else if (userId && userId !== '') {
+      // Pro subscription
+      const { error } = await supabase
+        .from('subscriptions')
+        .upsert({
+          user_id: userId,
+          plan,
+          status: subscription.status,
+          stripe_customer_id: session.customer as string,
+          stripe_subscription_id: subscriptionId,
+          current_period_start: periodStart,
+          current_period_end: periodEnd,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) {
+        console.error('Database error (user):', error);
+      } else {
+        console.log('✅ Pro subscription created for user:', userId);
+      }
+    }
+  } catch (error) {
+    console.error('Error processing subscription:', error);
   }
 }
 

@@ -1,4 +1,17 @@
-import { supabase } from './supabase';
+// src/lib/subscription.ts
+import { createClient } from '@supabase/supabase-js';
+
+// Use service role key for admin operations (bypasses RLS)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // Service role key
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 export type Plan = 'free' | 'pro' | 'enterprise';
 
@@ -19,7 +32,7 @@ export interface SubscriptionInfo {
 
 export async function getUserSubscription(userId: string): Promise<SubscriptionInfo> {
   // Check if user is part of an organization
-  const { data: orgMember } = await supabase
+  const { data: orgMember } = await supabaseAdmin
     .from('organization_members')
     .select('organization_id, organizations(name, id)')
     .eq('user_id', userId)
@@ -27,7 +40,7 @@ export async function getUserSubscription(userId: string): Promise<SubscriptionI
 
   if (orgMember && orgMember.organization_id) {
     // Check organization subscription
-    const { data: orgSub } = await supabase
+    const { data: orgSub } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
       .eq('organization_id', orgMember.organization_id)
@@ -53,7 +66,7 @@ export async function getUserSubscription(userId: string): Promise<SubscriptionI
   }
 
   // Check individual subscription
-  const { data: userSub } = await supabase
+  const { data: userSub } = await supabaseAdmin
     .from('subscriptions')
     .select('*')
     .eq('user_id', userId)
@@ -105,13 +118,13 @@ export async function logUsage(
   details?: any
 ): Promise<void> {
   // Get user's organization if any
-  const { data: orgMember } = await supabase
+  const { data: orgMember } = await supabaseAdmin
     .from('organization_members')
     .select('organization_id')
     .eq('user_id', userId)
     .single();
 
-  await supabase.from('usage_logs').insert({
+  await supabaseAdmin.from('usage_logs').insert({
     user_id: userId,
     organization_id: orgMember?.organization_id || null,
     action,
@@ -124,7 +137,7 @@ export async function getMonthlyUsage(userId: string): Promise<number> {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('usage_logs')
     .select('id')
     .eq('user_id', userId)
