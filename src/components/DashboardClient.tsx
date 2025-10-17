@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { useExtractActions } from '@/hooks/useExtractActions';
 import {
   FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield,
-  Calendar, Menu, X, Settings } from 'lucide-react';
+  Calendar, Menu, X, Settings, Bot
+} from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
@@ -40,6 +41,9 @@ export default function DashboardClient() {
   const [selectedRoomCode, setSelectedRoomCode] = useState<string | null>(null);
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
+  const [subscriptionInfo, setSubscriptionInfo] = useState<{
+    features?: { canUseMeetingBot?: boolean };
+  } | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -50,6 +54,19 @@ export default function DashboardClient() {
       loadMyRooms();
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    const checkSubscription = async () => {
+      try {
+        const response = await fetch('/api/subscription/status');
+        const data = await response.json();
+        setSubscriptionInfo(data);
+      } catch (error) {
+        console.error('Failed to load subscription:', error);
+      }
+    };
+    checkSubscription();
+  }, []);
 
   const loadMyRooms = async () => {
     setLoadingRooms(true);
@@ -321,6 +338,20 @@ export default function DashboardClient() {
               </span>
             )}
           </button>
+
+          {subscriptionInfo?.features?.canUseMeetingBot && (
+            <Link
+              href="/meeting-bot"
+              onClick={() => setSidebarOpen(false)}
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition text-gray-700 hover:bg-gray-50"
+            >
+              <Bot className="w-5 h-5" />
+              <span className="font-medium">Meeting Bot</span>
+              <span className="ml-auto px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+                Enterprise
+              </span>
+            </Link>
+          )}
 
           <div className="pt-4 border-t border-gray-200 space-y-2">
             <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -636,6 +667,8 @@ export default function DashboardClient() {
                 )}
               </motion.div>
             )}
+
+            {/* Meeting Bot Invitation View */}
 
             {/* Room Detail View */}
             {viewMode === 'room-view' && selectedRoomCode && (
