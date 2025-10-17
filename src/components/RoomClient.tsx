@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Room, RoomActionItem } from '@/lib/supabase';
-import { Share2, Calendar, Copy, CheckCircle, PlayCircle, Clock, ExternalLink } from 'lucide-react';
+import { Share2, Calendar, CheckCircle, PlayCircle, Clock, ExternalLink, Link } from 'lucide-react';
 
 interface RoomClientProps {
   room: Room;
@@ -140,13 +140,13 @@ export default function RoomClient({ room, initialActionItems }: RoomClientProps
                 )}
               </button>
               {user && (
-                <a
+                <Link
                   href="/dashboard"
                   className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm"
                 >
                   <span>Dashboard</span>
                   <ExternalLink className="w-4 h-4" />
-                </a>
+                </Link>
               )}
             </div>
           </div>
@@ -171,12 +171,12 @@ export default function RoomClient({ room, initialActionItems }: RoomClientProps
                 </div>
               </div>
               {!user && (
-                <a
+                <Link
                   href="/sign-in"
                   className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
                 >
                   Sign in to edit
-                </a>
+                </Link>
               )}
             </div>
           </div>

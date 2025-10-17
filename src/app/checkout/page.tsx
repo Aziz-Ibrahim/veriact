@@ -367,19 +367,19 @@ function CheckoutContent() {
             <div>
               <p className="font-medium text-gray-900 text-sm mb-1">Can I cancel anytime?</p>
               <p className="text-sm text-gray-600">
-                Yes! You can cancel your subscription at any time. You'll continue to have access until the end of your billing period.
+                Yes! You can cancel your subscription at any time. You&apos;ll continue to have access until the end of your billing period.
               </p>
             </div>
             <div>
               <p className="font-medium text-gray-900 text-sm mb-1">What payment methods do you accept?</p>
               <p className="text-sm text-gray-600">
-                We accept all major credit and debit cards via Stripe's secure payment processing.
+                We accept all major credit and debit cards via Stripe&apos;s secure payment processing.
               </p>
             </div>
             <div>
               <p className="font-medium text-gray-900 text-sm mb-1">Is there a refund policy?</p>
               <p className="text-sm text-gray-600">
-                We offer a 14-day money-back guarantee. If you're not satisfied, contact us for a full refund.
+                We offer a 14-day money-back guarantee. If you&apos;re not satisfied, contact us for a full refund.
               </p>
             </div>
           </div>
