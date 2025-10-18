@@ -273,11 +273,11 @@ export default function MeetingBotPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto">
             {step === 'form' && (
               <>
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+                <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 mb-6">
                   <div className="flex gap-2">
-                    <span className="text-indigo-600 flex-shrink-0 mt-0.5">ℹ️</span>
-                    <div className="text-sm text-indigo-900">
-                      <strong>Enterprise Feature:</strong> VeriAct Bot will join your meeting, record it, and extract action items automatically.
+                    <span className="text-yellow-600 flex-shrink-0 mt-0.5 text-xl">⚠️</span>
+                    <div className="text-sm text-yellow-900">
+                      <strong>Beta Feature:</strong> The Meeting Bot is currently in beta testing. While it works reliably, you may experience occasional issues. Please report any problems to support.
                     </div>
                   </div>
                 </div>
