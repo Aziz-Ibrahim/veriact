@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useExtractActions } from '@/hooks/useExtractActions';
 import {
   FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield,
-  Calendar, Menu, X, Settings, Bot
+  Calendar, Menu, X, Settings, Bot, Lock
 } from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import CreateRoomModal from './CreateRoomModal';
@@ -42,8 +42,14 @@ export default function DashboardClient() {
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [subscriptionInfo, setSubscriptionInfo] = useState<{
-    features?: { canUseMeetingBot?: boolean };
+    plan: 'free' | 'pro' | 'enterprise';
+    features?: { 
+      canUseMeetingBot?: boolean;
+      canCreateRooms?: boolean;
+      canInviteMembers?: boolean;
+    };
   } | null>(null);
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -56,17 +62,21 @@ export default function DashboardClient() {
   }, [viewMode]);
 
   useEffect(() => {
-    const checkSubscription = async () => {
-      try {
-        const response = await fetch('/api/subscription/status');
-        const data = await response.json();
-        setSubscriptionInfo(data);
-      } catch (error) {
-        console.error('Failed to load subscription:', error);
-      }
-    };
     checkSubscription();
   }, []);
+
+  const checkSubscription = async () => {
+    setLoadingSubscription(true);
+    try {
+      const response = await fetch('/api/subscription/status');
+      const data = await response.json();
+      setSubscriptionInfo(data);
+    } catch (error) {
+      console.error('Failed to load subscription:', error);
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
 
   const loadMyRooms = async () => {
     setLoadingRooms(true);
@@ -107,7 +117,6 @@ export default function DashboardClient() {
     setViewMode('room-view');
   };
 
-
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -132,6 +141,20 @@ export default function DashboardClient() {
       const fileInput = document.getElementById('file-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
     }
+  };
+
+  const handleShareWithTeam = () => {
+    // Check if user has Pro or Enterprise plan
+    if (!subscriptionInfo?.features?.canCreateRooms) {
+      toast.error('Room sharing requires Pro or Enterprise plan');
+      // Optionally redirect to upgrade page
+      setTimeout(() => {
+        window.location.href = '/checkout?plan=pro';
+      }, 1500);
+      return;
+    }
+
+    setShowCreateRoomModal(true);
   };
 
   const handleRoomCreated = () => {
@@ -194,7 +217,6 @@ export default function DashboardClient() {
       const text = await file.text();
 
       if (isCSV) {
-        // Parse CSV
         const lines = text.split('\n').filter(line => line.trim());
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
 
@@ -217,7 +239,6 @@ export default function DashboardClient() {
         addActionItems(importedItems);
         toast.success(`Imported ${importedItems.length} items from CSV`);
       } else {
-        // Parse JSON
         const importedItems = JSON.parse(text) as ActionItem[];
 
         if (!Array.isArray(importedItems)) {
@@ -235,6 +256,9 @@ export default function DashboardClient() {
       toast.error('Failed to import. Please use a valid JSON or CSV export from VeriAct.');
     }
   };
+
+  // Check if user can access rooms feature
+  const canAccessRooms = subscriptionInfo?.features?.canCreateRooms || subscriptionInfo?.plan === 'pro' || subscriptionInfo?.plan === 'enterprise';
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -263,7 +287,6 @@ export default function DashboardClient() {
               <span className="text-xl font-bold text-gray-900">VeriAct</span>
             </Link>
           </div>
-          {/* Close button for mobile */}
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-gray-500 hover:text-gray-700"
@@ -271,6 +294,30 @@ export default function DashboardClient() {
             <X className="w-6 h-6" />
           </button>
         </div>
+
+        {/* Subscription Badge */}
+        {!loadingSubscription && subscriptionInfo && (
+          <div className="p-4 m-4 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-indigo-900 uppercase">
+                {subscriptionInfo.plan} Plan
+              </span>
+              {subscriptionInfo.plan === 'free' && (
+                <Link 
+                  href="/checkout?plan=pro"
+                  className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold"
+                >
+                  Upgrade
+                </Link>
+              )}
+            </div>
+            {subscriptionInfo.plan === 'free' && (
+              <p className="text-xs text-gray-600">
+                Upgrade to Pro for team collaboration
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Privacy Notice */}
         <div className="p-4 m-4 bg-green-50 border border-green-200 rounded-lg">
@@ -360,16 +407,39 @@ export default function DashboardClient() {
 
             {actionItems.length > 0 && (
               <>
-                <button
-                  onClick={() => {
-                    setShowCreateRoomModal(true);
-                    setSidebarOpen(false);
-                  }}
-                  className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition"
-                >
-                  <Users className="w-4 h-4" />
-                  <span>Share with Team</span>
-                </button>
+                {/* Only show Share with Team if user has Pro/Enterprise */}
+                {canAccessRooms && (
+                  <button
+                    onClick={() => {
+                      handleShareWithTeam();
+                      setSidebarOpen(false);
+                    }}
+                    className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Share with Team</span>
+                  </button>
+                )}
+
+                {/* Show upgrade prompt for free users */}
+                {!canAccessRooms && (
+                  <button
+                    onClick={() => {
+                      toast.error('Room sharing requires Pro or Enterprise plan');
+                      setTimeout(() => {
+                        window.location.href = '/checkout?plan=pro';
+                      }, 1500);
+                      setSidebarOpen(false);
+                    }}
+                    className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-400 hover:bg-gray-50 rounded-lg transition border border-dashed border-gray-300"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>Share with Team</span>
+                    <span className="ml-auto text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold">
+                      Pro
+                    </span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {
@@ -619,36 +689,77 @@ export default function DashboardClient() {
               >
                 <div className="mb-6">
                   <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Rooms</h1>
-                  <p className="text-sm sm:text-base text-gray-600">List of rooms that you are a member of</p>
+                  <p className="text-sm sm:text-base text-gray-600">
+                    {canAccessRooms 
+                      ? 'Rooms you created and rooms you\'ve been invited to' 
+                      : 'Join rooms shared by your team (room creation requires Pro)'}
+                  </p>
                 </div>
+
+                {/* Free users see helpful message about joining */}
+                {!canAccessRooms && myRooms.length === 0 && (
+                  <div className="mb-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+                    <div className="flex items-start space-x-3">
+                      <Users className="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-blue-900 mb-2">
+                          You can join rooms as a guest! 👋
+                        </h3>
+                        <p className="text-sm text-blue-800 mb-3">
+                          Even on the free plan, you can join collaboration rooms created by Pro or Enterprise users. 
+                          Just ask them to share their room code with you.
+                        </p>
+                        <div className="flex items-center space-x-2 text-sm text-blue-700">
+                          <span>Want to create your own rooms?</span>
+                          <a 
+                            href="/checkout?plan=pro" 
+                            className="font-semibold underline hover:text-blue-900"
+                          >
+                            Upgrade to Pro →
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end mb-6">
                   <button
                     onClick={() => setShowJoinRoomModal(true)}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm flex items-center space-x-2"
                   >
-                    Join Room
+                    <Users className="w-4 h-4" />
+                    <span>Join Room with Code</span>
                   </button>
                 </div>
 
-
                 {myRooms.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">No shared rooms yet.</p>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                    <Users className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {canAccessRooms ? 'No rooms yet' : 'No rooms joined yet'}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-6">
+                      {canAccessRooms 
+                        ? 'Create a room after processing a transcript or join an existing room' 
+                        : 'Use the "Join Room with Code" button above to join a room shared by your team'}
+                    </p>
+                  </div>
                 ) : (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                  <div className="space-y-4">
                     {myRooms.map((room) => (
                       <div
                         key={room.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition cursor-pointer"
+                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:border-indigo-300 transition cursor-pointer"
                         onClick={() => handleOpenRoom(room.room_code)}
                       >
                         <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold text-gray-900">{room.title}</h3>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 mb-1">{room.title}</h3>
                             <p className="text-sm text-indigo-600">Code: {room.room_code}</p>
                           </div>
                           {mounted && (
-                            <div className="flex flex-col text-xs text-gray-600 space-y-1">
+                            <div className="flex flex-col text-xs text-gray-600 space-y-1 text-right">
                               <div className="flex items-center gap-2">
                                 <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                                 <span className="leading-tight">Created {new Date(room.created_at).toLocaleDateString()}</span>
@@ -667,8 +778,6 @@ export default function DashboardClient() {
                 )}
               </motion.div>
             )}
-
-            {/* Meeting Bot Invitation View */}
 
             {/* Room Detail View */}
             {viewMode === 'room-view' && selectedRoomCode && (
@@ -689,14 +798,16 @@ export default function DashboardClient() {
         </div>
       </main>
 
-      {/* Create Room Modal */}
-      <CreateRoomModal
-        isOpen={showCreateRoomModal}
-        onClose={() => setShowCreateRoomModal(false)}
-        actionItems={actionItems}
-        meetingTitle={lastMeetingTitle}
-        onRoomCreated={handleRoomCreated}
-      />
+      {/* Create Room Modal - Only shown if user has access */}
+      {canAccessRooms && (
+        <CreateRoomModal
+          isOpen={showCreateRoomModal}
+          onClose={() => setShowCreateRoomModal(false)}
+          actionItems={actionItems}
+          meetingTitle={lastMeetingTitle}
+          onRoomCreated={handleRoomCreated}
+        />
+      )}
 
       {/* Join Room Modal */}
       <JoinRoomModal
