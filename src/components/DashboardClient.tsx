@@ -95,18 +95,30 @@ export default function DashboardClient() {
 
   const handleJoinRoom = async () => {
     if (!joinCode.trim()) return;
+    
+    setShowJoinRoomModal(false);
+    
     try {
-      const res = await fetch(`/api/rooms/${joinCode}/check-access`);
+      const res = await fetch(`/api/rooms/${joinCode.toUpperCase()}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
       const data = await res.json();
-      if (data.success) {
-        toast.success('Access granted!');
+      
+      if (res.ok && data.hasAccess) {
+        toast.success('Successfully joined room!');
+        // Refresh rooms list
+        await loadMyRooms();
+        // Navigate to the room
+        setSelectedRoomCode(joinCode.toUpperCase());
         setViewMode('room-view');
-        setSelectedRoomCode(joinCode);
       } else {
-        toast.error('Invalid or unauthorized room code');
+        toast.error(data.error || 'Failed to join room');
       }
-    } catch {
-      toast.error('Failed to verify room access');
+    } catch (error) {
+      console.error('Join room error:', error);
+      toast.error('Failed to join room');
     } finally {
       setJoinCode('');
     }
@@ -467,7 +479,7 @@ export default function DashboardClient() {
 
             <label className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition cursor-pointer">
               <Upload className="w-4 h-4" />
-              <span>Import JSON</span>
+              <span>Import from Files</span>
               <input
                 type="file"
                 accept=".json"
@@ -558,7 +570,7 @@ export default function DashboardClient() {
                         Process Transcript
                       </button>
                       <label className="w-full sm:w-auto px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition cursor-pointer text-center">
-                        Import JSON
+                        Import from Files
                         <input
                           type="file"
                           accept=".json"

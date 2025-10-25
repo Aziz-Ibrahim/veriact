@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Loader2, DoorOpen } from 'lucide-react';
+import { X, Loader2, DoorOpen, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface JoinRoomModalProps {
@@ -17,7 +17,7 @@ export default function JoinRoomModal({ isOpen, onClose, onJoin }: JoinRoomModal
   if (!isOpen) return null;
 
   const handleJoin = async () => {
-    const code = roomCode.trim();
+    const code = roomCode.trim().toUpperCase();
     if (!code) {
       toast.error('Please enter a room code');
       return;
@@ -25,22 +25,28 @@ export default function JoinRoomModal({ isOpen, onClose, onJoin }: JoinRoomModal
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/rooms/${code}/check-access`);
+      const res = await fetch(`/api/rooms/${code}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
       const data = await res.json();
       
-      // Check if user has access based on the check-access endpoint response
-      if (data.hasAccess) {
-        toast.success('Joined successfully!');
+      if (res.ok && data.hasAccess) {
+        toast.success(
+          data.isOwner 
+            ? 'Welcome back to your room!' 
+            : `Joined as ${data.accessLevel}!`
+        );
         onJoin(code);
-        setRoomCode(''); // Clear input
+        setRoomCode('');
         onClose();
       } else {
-        // Show specific error message from API
-        toast.error(data.error || 'Invalid or unauthorized room code');
+        toast.error(data.error || 'Failed to join room');
       }
     } catch (error) {
       console.error('Error joining room:', error);
-      toast.error('Failed to verify room');
+      toast.error('Network error - please try again');
     } finally {
       setLoading(false);
     }
@@ -53,8 +59,10 @@ export default function JoinRoomModal({ isOpen, onClose, onJoin }: JoinRoomModal
   };
 
   const handleClose = () => {
-    setRoomCode('');
-    onClose();
+    if (!loading) {
+      setRoomCode('');
+      onClose();
+    }
   };
 
   return (
@@ -62,7 +70,8 @@ export default function JoinRoomModal({ isOpen, onClose, onJoin }: JoinRoomModal
       <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 relative">
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+          disabled={loading}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 disabled:opacity-50"
         >
           <X className="w-5 h-5" />
         </button>
@@ -73,13 +82,22 @@ export default function JoinRoomModal({ isOpen, onClose, onJoin }: JoinRoomModal
           </div>
           <div>
             <h2 className="text-xl text-gray-900 font-semibold">Join a Room</h2>
-            <p className="text-xs text-gray-500">Access shared action items</p>
+            <p className="text-xs text-gray-500">Enter the code shared with you</p>
           </div>
         </div>
 
-        <p className="text-sm text-gray-600 mb-4">
-          Enter the room code that was shared with you to access the action items.
-        </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">Free users can join too!</p>
+              <p className="text-xs text-blue-700">
+                You can join and collaborate in rooms created by Pro or Enterprise users, 
+                even if you're on the free plan.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -93,28 +111,31 @@ export default function JoinRoomModal({ isOpen, onClose, onJoin }: JoinRoomModal
             placeholder="ROOM-XXXXXXX"
             className="w-full px-4 py-2.5 text-indigo-600 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
             autoFocus
+            disabled={loading}
+            maxLength={15}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Format: ROOM-XXXXXXX
+            Format: ROOM-XXXXXXX (case insensitive)
           </p>
         </div>
 
         <div className="flex justify-end space-x-3">
           <button
             onClick={handleClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+            disabled={loading}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleJoin}
             disabled={loading || !roomCode.trim()}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed min-w-[120px]"
           >
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Verifying...
+                Joining...
               </>
             ) : (
               <>
