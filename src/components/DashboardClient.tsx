@@ -5,12 +5,13 @@ import { useState, useEffect } from 'react';
 import { useExtractActions } from '@/hooks/useExtractActions';
 import {
   FileText, Loader2, AlertCircle, Users, Upload, Download, Home, Shield,
-  Calendar, Menu, X, Settings, Bot, Lock
+  Calendar, Menu, X, Settings, Bot, Lock, Video, ArrowRight, Mic
 } from 'lucide-react';
 import ActionItemCard from './ActionItemCard';
 import CreateRoomModal from './CreateRoomModal';
 import JoinRoomModal from './JoinRoomModal';
 import RoomView from './RoomView';
+import RecordingUpload from './RecordingUpload';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem } from '@/types';
@@ -24,7 +25,7 @@ interface Room {
   expires_at: string;
 }
 
-type ViewMode = 'home' | 'upload' | 'rooms' | 'room-view';
+type ViewMode = 'home' | 'upload' | 'upload-transcript' | 'upload-recording' | 'rooms' | 'room-view';
 
 export default function DashboardClient() {
   const { actionItems, clearActionItems, addActionItems } = useStore();
@@ -40,7 +41,6 @@ export default function DashboardClient() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedRoomCode, setSelectedRoomCode] = useState<string | null>(null);
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
   const [subscriptionInfo, setSubscriptionInfo] = useState<{
     plan: 'free' | 'pro' | 'enterprise';
     features?: { 
@@ -93,37 +93,6 @@ export default function DashboardClient() {
     }
   };
 
-  const handleJoinRoom = async () => {
-    if (!joinCode.trim()) return;
-    
-    setShowJoinRoomModal(false);
-    
-    try {
-      const res = await fetch(`/api/rooms/${joinCode.toUpperCase()}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok && data.hasAccess) {
-        toast.success('Successfully joined room!');
-        // Refresh rooms list
-        await loadMyRooms();
-        // Navigate to the room
-        setSelectedRoomCode(joinCode.toUpperCase());
-        setViewMode('room-view');
-      } else {
-        toast.error(data.error || 'Failed to join room');
-      }
-    } catch (error) {
-      console.error('Join room error:', error);
-      toast.error('Failed to join room');
-    } finally {
-      setJoinCode('');
-    }
-  };
-
   const handleOpenRoom = (roomCode: string) => {
     setSelectedRoomCode(roomCode);
     setViewMode('room-view');
@@ -156,16 +125,13 @@ export default function DashboardClient() {
   };
 
   const handleShareWithTeam = () => {
-    // Check if user has Pro or Enterprise plan
-    if (!subscriptionInfo?.features?.canCreateRooms) {
+    if (!canAccessRooms) {
       toast.error('Room sharing requires Pro or Enterprise plan');
-      // Optionally redirect to upgrade page
       setTimeout(() => {
         window.location.href = '/checkout?plan=pro';
       }, 1500);
       return;
     }
-
     setShowCreateRoomModal(true);
   };
 
@@ -230,8 +196,6 @@ export default function DashboardClient() {
 
       if (isCSV) {
         const lines = text.split('\n').filter(line => line.trim());
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-
         const importedItems: ActionItem[] = [];
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',');
@@ -269,8 +233,12 @@ export default function DashboardClient() {
     }
   };
 
-  // Check if user can access rooms feature
-  const canAccessRooms = subscriptionInfo?.features?.canCreateRooms || subscriptionInfo?.plan === 'pro' || subscriptionInfo?.plan === 'enterprise';
+  const canAccessRooms = subscriptionInfo?.features?.canCreateRooms || 
+                        subscriptionInfo?.plan === 'pro' || 
+                        subscriptionInfo?.plan === 'enterprise';
+
+  const canAccessRecordings = subscriptionInfo?.plan === 'pro' || 
+                             subscriptionInfo?.plan === 'enterprise';
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -325,7 +293,7 @@ export default function DashboardClient() {
             </div>
             {subscriptionInfo.plan === 'free' && (
               <p className="text-xs text-gray-600">
-                Upgrade to Pro for team collaboration
+                Upgrade to Pro for team collaboration & recording uploads
               </p>
             )}
           </div>
@@ -370,13 +338,13 @@ export default function DashboardClient() {
               setViewMode('upload');
               setSidebarOpen(false);
             }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${viewMode === 'upload'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${viewMode === 'upload' || viewMode === 'upload-transcript' || viewMode === 'upload-recording'
                 ? 'bg-indigo-50 text-indigo-600'
                 : 'text-gray-700 hover:bg-gray-50'
               }`}
           >
             <Upload className="w-5 h-5" />
-            <span className="font-medium">Process Transcript</span>
+            <span className="font-medium">Process Meeting</span>
           </button>
 
           <button
@@ -419,7 +387,6 @@ export default function DashboardClient() {
 
             {actionItems.length > 0 && (
               <>
-                {/* Only show Share with Team if user has Pro/Enterprise */}
                 {canAccessRooms && (
                   <button
                     onClick={() => {
@@ -433,7 +400,6 @@ export default function DashboardClient() {
                   </button>
                 )}
 
-                {/* Show upgrade prompt for free users */}
                 {!canAccessRooms && (
                   <button
                     onClick={() => {
@@ -479,7 +445,7 @@ export default function DashboardClient() {
 
             <label className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition cursor-pointer">
               <Upload className="w-4 h-4" />
-              <span>Import from Files</span>
+              <span>Import JSON</span>
               <input
                 type="file"
                 accept=".json"
@@ -567,10 +533,10 @@ export default function DashboardClient() {
                         onClick={() => setViewMode('upload')}
                         className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                       >
-                        Process Transcript
+                        Process Meeting
                       </button>
                       <label className="w-full sm:w-auto px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition cursor-pointer text-center">
-                        Import from Files
+                        Import JSON
                         <input
                           type="file"
                           accept=".json"
@@ -600,7 +566,7 @@ export default function DashboardClient() {
               </motion.div>
             )}
 
-            {/* Upload View */}
+            {/* Upload Choice View - NEW */}
             {viewMode === 'upload' && (
               <motion.div
                 key="upload"
@@ -610,9 +576,113 @@ export default function DashboardClient() {
                 transition={{ duration: 0.2 }}
               >
                 <div className="mb-6">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Process Meeting Transcript</h1>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Process Meeting</h1>
                   <p className="text-sm sm:text-base text-gray-600">
-                    Upload a transcript file to extract action items automatically
+                    Choose how you want to process your meeting
+                  </p>
+                </div>
+
+                {/* Two Options */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Option 1: Transcript Upload */}
+                  <div
+                    onClick={() => setViewMode('upload-transcript')}
+                    className="bg-white border-2 border-indigo-200 rounded-xl p-8 hover:border-indigo-400 hover:shadow-lg transition cursor-pointer group"
+                  >
+                    <div className="flex items-center space-x-3 mb-4">
+                      <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition">
+                        <FileText className="w-6 h-6 text-indigo-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Upload Transcript</h3>
+                        <p className="text-xs text-gray-500">TXT, DOCX, PDF files</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Already have a transcript? Upload it directly for instant processing.
+                    </p>
+                    <div className="flex items-center space-x-2 text-sm text-indigo-600 font-semibold">
+                      <span>Choose this option</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition" />
+                    </div>
+                  </div>
+
+                  {/* Option 2: Recording Upload - PRO */}
+                  <div
+                    onClick={() => {
+                      if (canAccessRecordings) {
+                        setViewMode('upload-recording');
+                      } else {
+                        toast.error('Audio/Video upload requires Pro or Enterprise plan');
+                        setTimeout(() => {
+                          window.location.href = '/checkout?plan=pro';
+                        }, 1500);
+                      }
+                    }}
+                    className={`bg-white border-2 rounded-xl p-8 hover:shadow-lg transition cursor-pointer group relative ${
+                      canAccessRecordings 
+                        ? 'border-purple-200 hover:border-purple-400' 
+                        : 'border-gray-200 opacity-75'
+                    }`}
+                  >
+                    {!canAccessRecordings && (
+                      <div className="absolute top-3 right-3">
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">
+                          PRO
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center space-x-3 mb-4">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition ${
+                        canAccessRecordings 
+                          ? 'bg-purple-100 group-hover:bg-purple-200' 
+                          : 'bg-gray-100'
+                      }`}>
+                        <Video className={`w-6 h-6 ${canAccessRecordings ? 'text-purple-600' : 'text-gray-400'}`} />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 flex items-center space-x-2">
+                          <span>Upload Recording</span>
+                          {!canAccessRecordings && <Lock className="w-4 h-4 text-gray-400" />}
+                        </h3>
+                        <p className="text-xs text-gray-500">MP4, MP3, WAV, M4A</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Upload audio or video and let AI auto-transcribe. Saves 30+ minutes!
+                    </p>
+                    <div className={`flex items-center space-x-2 text-sm font-semibold ${
+                      canAccessRecordings ? 'text-purple-600' : 'text-gray-400'
+                    }`}>
+                      <span>{canAccessRecordings ? 'Choose this option' : 'Upgrade to Pro'}</span>
+                      <ArrowRight className={`w-4 h-4 ${canAccessRecordings ? 'group-hover:translate-x-1' : ''} transition`} />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Transcript Upload View */}
+            {viewMode === 'upload-transcript' && (
+              <motion.div
+                key="upload-transcript"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="mb-6">
+                  <button
+                    onClick={() => setViewMode('upload')}
+                    className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-4"
+                  >
+                    <ArrowRight className="w-4 h-4 rotate-180" />
+                    <span>Back to options</span>
+                  </button>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Upload Transcript</h1>
+                  <p className="text-sm sm:text-base text-gray-600">
+                    Upload a transcript file to extract action items
                   </p>
                 </div>
 
@@ -665,7 +735,12 @@ export default function DashboardClient() {
                   {selectedFile && (
                     <div className="mt-6 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
                       <button
-                        onClick={() => setSelectedFile(null)}
+                        onClick={() => {
+                          setSelectedFile(null);
+                          setMeetingTitle('');
+                          const fileInput = document.getElementById('file-input') as HTMLInputElement;
+                          if (fileInput) fileInput.value = '';
+                        }}
                         className="w-full sm:w-auto px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
                       >
                         Cancel
@@ -690,6 +765,49 @@ export default function DashboardClient() {
               </motion.div>
             )}
 
+            {/* Recording Upload View */}
+            {viewMode === 'upload-recording' && (
+              <motion.div
+                key="upload-recording"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="mb-6">
+                  <button
+                    onClick={() => setViewMode('upload')}
+                    className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-4"
+                  >
+                    <ArrowRight className="w-4 h-4 rotate-180" />
+                    <span>Back to options</span>
+                  </button>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Upload Recording</h1>
+                  <p className="text-sm sm:text-base text-gray-600">
+                    Upload audio or video for auto-transcription
+                  </p>
+                </div>
+
+                <RecordingUpload
+                  onTranscriptionComplete={async (transcript, title) => {
+                    // Create a virtual file from the transcript text
+                    const blob = new Blob([transcript], { type: 'text/plain' });
+                    const file = new File([blob], 'transcript.txt', { type: 'text/plain' });
+                    
+                    // Extract action items using existing logic
+                    const result = await extractActions(file, title);
+
+                    if (result.success) {
+                      toast.success(`Extracted ${result.count} action items from recording!`);
+                      setLastMeetingTitle(title);
+                      setViewMode('home');
+                    }
+                  }}
+                  onCancel={() => setViewMode('upload')}
+                />
+              </motion.div>
+            )}
+
             {/* Rooms List View */}
             {viewMode === 'rooms' && (
               <motion.div
@@ -708,7 +826,6 @@ export default function DashboardClient() {
                   </p>
                 </div>
 
-                {/* Free users see helpful message about joining */}
                 {!canAccessRooms && myRooms.length === 0 && (
                   <div className="mb-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
                     <div className="flex items-start space-x-3">
@@ -745,7 +862,11 @@ export default function DashboardClient() {
                   </button>
                 </div>
 
-                {myRooms.length === 0 ? (
+                {loadingRooms ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                    <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
+                  </div>
+                ) : myRooms.length === 0 ? (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                     <Users className="mx-auto h-16 w-16 text-gray-300 mb-4" />
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -776,7 +897,6 @@ export default function DashboardClient() {
                                 <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                                 <span className="leading-tight">Created {new Date(room.created_at).toLocaleDateString()}</span>
                               </div>
-
                               <div className="flex items-center gap-2">
                                 <span className="text-orange-600" aria-hidden>⏰</span>
                                 <span className="text-orange-600 leading-tight">Expires {new Date(room.expires_at).toLocaleDateString()}</span>
@@ -810,7 +930,7 @@ export default function DashboardClient() {
         </div>
       </main>
 
-      {/* Create Room Modal - Only shown if user has access */}
+      {/* Create Room Modal */}
       {canAccessRooms && (
         <CreateRoomModal
           isOpen={showCreateRoomModal}
@@ -830,7 +950,6 @@ export default function DashboardClient() {
           setViewMode('room-view');
         }}
       />
-
     </div>
   );
 }
