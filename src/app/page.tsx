@@ -1,8 +1,10 @@
+// src/app/page.tsx - Updated Features Grid and Pricing Section
+
 'use client';
 
 import { HeroBackground } from '../components/HeroBackground';
 import { motion } from 'motion/react';
-import { CheckCircle2, Lock, Bell, Shield, Users, Download, Zap, Check, X, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Lock, Bell, Shield, Users, Download, Zap, Check, X, ArrowRight, Mic, Video, FileText } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 
 export default function App() {
@@ -12,6 +14,7 @@ export default function App() {
   const heroCTA = isSignedIn ? 'Go to Dashboard' : 'Start Free';
   const pricingFreeCTA = isSignedIn ? 'Open Dashboard' : 'Get Started Free';
   const pricingProCTA = isSignedIn ? 'Upgrade to Pro' : 'Start Pro Trial';
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -66,7 +69,7 @@ export default function App() {
               transition={{ delay: 0.2, duration: 0.8 }}
               className="text-xl text-white/90 mb-8 max-w-2xl mx-auto"
             >
-              VeriAct extracts action items from your meeting transcripts using AI,
+              VeriAct extracts action items from your meeting transcripts and recordings using AI,
               keeps them organized, and reminds you before deadlines.
             </motion.p>
             
@@ -100,7 +103,7 @@ export default function App() {
             >
               <Shield className="w-5 h-5 text-green-400" />
               <span className="text-sm text-white">
-                Privacy First · No Meeting Transcripts Stored · GDPR Compliant
+                Privacy First · Recordings Auto-Deleted · GDPR Compliant
               </span>
             </motion.div>
           </div>
@@ -248,7 +251,7 @@ export default function App() {
             >
               <div className="absolute top-4 right-4">
                 <span className="px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 text-xs font-bold rounded-full">
-                  🚀 AUTOMATION
+                  AUTOMATION
                 </span>
               </div>
 
@@ -306,7 +309,7 @@ export default function App() {
             <p className="text-xl text-gray-600">Everything you need to stay on top of action items</p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -319,7 +322,7 @@ export default function App() {
               </div>
               <h3 className="text-xl font-semibold mb-2 text-indigo-600">AI-Powered Extraction</h3>
               <p className="text-gray-600">
-                Automatically identifies action items, assignees, and deadlines from your meeting transcripts.
+                Automatically identifies action items, assignees, and deadlines from your meeting transcripts and recordings.
               </p>
             </motion.div>
 
@@ -331,11 +334,11 @@ export default function App() {
               className="bg-white p-8 rounded-xl shadow-md"
             >
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-                <Users className="w-6 h-6 text-purple-600" />
+                <Video className="w-6 h-6 text-purple-600" />
               </div>
-              <h3 className="text-xl font-semibold mb-2 text-purple-600">Team Collaboration</h3>
+              <h3 className="text-xl font-semibold mb-2 text-purple-600">Audio & Video Upload</h3>
               <p className="text-gray-600">
-                Create rooms, invite members, and track action items together. Everyone stays in sync.
+                Upload meeting recordings (MP4, MP3, WAV) and let AI auto-transcribe and extract action items. Pro feature.
               </p>
             </motion.div>
 
@@ -347,11 +350,11 @@ export default function App() {
               className="bg-white p-8 rounded-xl shadow-md"
             >
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                <Bell className="w-6 h-6 text-green-600" />
+                <Users className="w-6 h-6 text-green-600" />
               </div>
-              <h3 className="text-xl font-semibold mb-2 text-green-600">Smart Reminders</h3>
+              <h3 className="text-xl font-semibold mb-2 text-green-600">Team Collaboration</h3>
               <p className="text-gray-600">
-                Get notified before deadlines via email. Never miss an important task again.
+                Create rooms, invite members, and track action items together. Everyone stays in sync with real-time updates.
               </p>
             </motion.div>
 
@@ -363,11 +366,11 @@ export default function App() {
               className="bg-white p-8 rounded-xl shadow-md"
             >
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                <Lock className="w-6 h-6 text-blue-600" />
+                <Bell className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="text-xl font-semibold mb-2 text-blue-600">Privacy First</h3>
+              <h3 className="text-xl font-semibold mb-2 text-blue-600">Smart Reminders</h3>
               <p className="text-gray-600">
-                Meeting transcripts are never stored. Only action items are saved if you choose to collaborate.
+                Get notified before deadlines via email. Never miss an important task again with automated reminders.
               </p>
             </motion.div>
 
@@ -378,12 +381,12 @@ export default function App() {
               transition={{ delay: 0.4, duration: 0.6 }}
               className="bg-white p-8 rounded-xl shadow-md"
             >
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-4">
-                <Download className="w-6 h-6 text-yellow-600" />
+              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
+                <Lock className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold mb-2 text-yellow-600">Export Anywhere</h3>
+              <h3 className="text-xl font-semibold mb-2 text-red-600">Privacy First</h3>
               <p className="text-gray-600">
-                Download your action items as JSON or CSV to use with other tools or devices.
+                Recordings auto-deleted after processing. Only action items are saved if you choose to collaborate.
               </p>
             </motion.div>
 
@@ -394,19 +397,19 @@ export default function App() {
               transition={{ delay: 0.5, duration: 0.6 }}
               className="bg-white p-8 rounded-xl shadow-md"
             >
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
-                <CheckCircle2 className="w-6 h-6 text-red-600" />
+              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-4">
+                <Download className="w-6 h-6 text-yellow-600" />
               </div>
-              <h3 className="text-xl font-semibold mb-2 text-red-600">Status Tracking</h3>
+              <h3 className="text-xl font-semibold mb-2 text-yellow-600">Export Anywhere</h3>
               <p className="text-gray-600">
-                Mark tasks as pending, in-progress, or completed. See progress at a glance.
+                Download your action items as JSON or CSV to use with other tools, or add deadlines to your calendar.
               </p>
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* Pricing Section */}
+      {/* Pricing Section - UPDATED */}
       <section id="pricing" className="bg-white py-20">
         <div className="container mx-auto px-4">
           <motion.div
@@ -455,16 +458,20 @@ export default function App() {
                   <span className="text-gray-700">Export to JSON/CSV</span>
                 </li>
                 <li className="flex items-start space-x-3">
+                  <Check className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">Join rooms as guest</span>
+                </li>
+                <li className="flex items-start space-x-3">
                   <X className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-gray-400">No collaboration</span>
+                  <span className="text-gray-400">No audio/video upload</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <X className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-400">No room creation</span>
                 </li>
                 <li className="flex items-start space-x-3">
                   <X className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
                   <span className="text-gray-400">No email reminders</span>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <X className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-gray-400">No meeting bot</span>
                 </li>
               </ul>
 
@@ -493,7 +500,7 @@ export default function App() {
 
               <h3 className="text-2xl font-bold mb-2">Pro</h3>
               <div className="mb-6">
-                <span className="text-4xl font-bold">£9</span>
+                <span className="text-4xl font-bold">£12</span>
                 <span className="text-indigo-200">/month</span>
               </div>
               
@@ -507,8 +514,12 @@ export default function App() {
                   <span>Upload transcripts (TXT, DOCX, PDF)</span>
                 </li>
                 <li className="flex items-start space-x-3">
-                  <Check className="w-5 h-5 text-green-300 mt-0.5 flex-shrink-0" />
-                  <span>AI action item extraction</span>
+                  <Mic className="w-5 h-5 text-yellow-300 mt-0.5 flex-shrink-0" />
+                  <span><strong>Upload recordings</strong> (MP4, MP3, WAV)</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <Video className="w-5 h-5 text-yellow-300 mt-0.5 flex-shrink-0" />
+                  <span><strong>Auto-transcription</strong> with AI</span>
                 </li>
                 <li className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-green-300 mt-0.5 flex-shrink-0" />
@@ -551,7 +562,7 @@ export default function App() {
             >
               <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                 <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-4 py-1 rounded-full text-sm font-bold">
-                  🚀 ENTERPRISE
+                  ENTERPRISE
                 </span>
               </div>
 
@@ -584,6 +595,10 @@ export default function App() {
                 </li>
                 <li className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <span>Organization management</span>
+                </li>
+                <li className="flex items-start space-x-3">
+                  <Check className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
                   <span>Priority support</span>
                 </li>
                 <li className="flex items-start space-x-3">
@@ -602,7 +617,7 @@ export default function App() {
             </motion.div>
           </div>
 
-          {/* Enterprise Features Callout */}
+          {/* Pro vs Enterprise Comparison */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -610,29 +625,31 @@ export default function App() {
             transition={{ delay: 0.3 }}
             className="mt-12 max-w-4xl mx-auto"
           >
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 border-2 border-yellow-400">
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-8 border-2 border-purple-200">
               <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-yellow-400 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">🤖</span>
+                <div className="flex-shrink-0 w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-xl font-bold text-white mb-2">How the VeriAct Meeting Bot Works</h4>
-                  <p className="text-gray-300 mb-4">
-                    Simply invite VeriAct to your Zoom or Google Meet. Our AI bot will join, listen, transcribe, 
-                    and automatically extract action items—no manual uploads needed!
-                  </p>
-                  <div className="grid md:grid-cols-3 gap-4 text-sm">
-                    <div className="bg-gray-800/50 p-3 rounded-lg">
-                      <p className="text-yellow-400 font-semibold mb-1">1. Invite Bot</p>
-                      <p className="text-gray-400">Add VeriAct to your meeting calendar invite</p>
+                  <h4 className="text-xl font-bold text-gray-900 mb-2">Pro vs Enterprise: What's the Difference?</h4>
+                  <div className="grid md:grid-cols-2 gap-4 text-sm">
+                    <div className="bg-white p-4 rounded-lg">
+                      <p className="text-purple-900 font-semibold mb-2">✨ Pro Plan (£12/mo)</p>
+                      <ul className="space-y-1 text-gray-700">
+                        <li>• Upload meeting recordings manually</li>
+                        <li>• AI auto-transcribes in 5-10 minutes</li>
+                        <li>• Great for individuals & small teams</li>
+                        <li>• File size limit: 500MB per upload</li>
+                      </ul>
                     </div>
-                    <div className="bg-gray-800/50 p-3 rounded-lg">
-                      <p className="text-yellow-400 font-semibold mb-1">2. Auto-Join</p>
-                      <p className="text-gray-400">Bot joins at meeting start, records & transcribes</p>
-                    </div>
-                    <div className="bg-gray-800/50 p-3 rounded-lg">
-                      <p className="text-yellow-400 font-semibold mb-1">3. Instant Room</p>
-                      <p className="text-gray-400">Action items extracted & room created automatically</p>
+                    <div className="bg-white p-4 rounded-lg">
+                      <p className="text-yellow-700 font-semibold mb-2">Enterprise (£49/mo)</p>
+                      <ul className="space-y-1 text-gray-700">
+                        <li>• Bot auto-joins meetings (no uploads!)</li>
+                        <li>• Real-time transcription & extraction</li>
+                        <li>• Perfect for organizations</li>
+                        <li>• Unlimited file sizes & priority processing</li>
+                      </ul>
                     </div>
                   </div>
                 </div>
