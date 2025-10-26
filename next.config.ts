@@ -1,3 +1,4 @@
+// next.config.ts
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -5,8 +6,16 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // Optional: Also ignore TypeScript errors if needed
     // ignoreBuildErrors: true,
+  },
+  // Enable larger file uploads for audio/video
+  experimental: {
+    // Increase body size limit for API routes (500MB for Pro users)
+    bodySizeLimit: '500mb',
+  },
+  // Server configuration for handling large uploads
+  serverRuntimeConfig: {
+    maxUploadSize: 500 * 1024 * 1024, // 500MB
   },
 }
 
