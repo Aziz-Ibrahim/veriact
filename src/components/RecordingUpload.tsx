@@ -386,7 +386,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
             </h3>
             <p className="text-sm text-gray-600 mb-4">
               {stage === 'extracting' || stage === 'compressing'
-                ? 'Processing in your browser (free!)' 
+                ? 'Processing in your browser' 
                 : 'This may take a few minutes...'}
             </p>
             
@@ -463,8 +463,8 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">💰 Cost-Saving Features:</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Video → Audio extraction happens in your browser (free!)</li>
-                <li>Audio compression reduces file size by 50-80% (free!)</li>
+                <li>Video → Audio extraction happens in your browser</li>
+                <li>Audio compression reduces file size by 50-80% </li>
                 <li>Large files automatically chunked for processing</li>
                 <li>Only pay for transcription time (~$0.36 per hour)</li>
                 <li>Your recording is deleted after processing (privacy first!)</li>
