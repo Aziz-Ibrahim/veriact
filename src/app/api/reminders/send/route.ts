@@ -4,7 +4,10 @@ import { supabase } from '@/lib/supabase';
 import { generateReminderEmail } from '@/lib/email-templates';
 
 // Security: Only allow requests with correct authorization
-const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
+const CRON_SECRET = process.env.CRON_SECRET;
+if (!CRON_SECRET) {
+  throw new Error('CRON_SECRET must be set');
+}
 
 export async function POST(request: NextRequest) {
   try {
