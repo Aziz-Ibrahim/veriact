@@ -1,23 +1,29 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Video, Mic, Upload, X, Loader2, CheckCircle, AlertCircle, FileAudio } from 'lucide-react';
+import { Video, Mic, Upload, X, Loader2, CheckCircle, AlertCircle, FileAudio, Scissors } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { extractAudioFromVideo, compressAudio, isVideoFile, needsCompression } from '@/lib/audioExtractor';
+import { needsChunking, estimateProcessingTime } from '@/lib/fileChunker';
 
 interface RecordingUploadProps {
   onTranscriptionComplete: (transcript: string, meetingTitle: string) => void;
   onCancel: () => void;
 }
 
+type ProcessingStage = 'idle' | 'extracting' | 'compressing' | 'uploading' | 'transcribing' | 'complete' | 'error';
+
 export default function RecordingUpload({ onTranscriptionComplete, onCancel }: RecordingUploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [processedFile, setProcessedFile] = useState<File | null>(null);
   const [meetingTitle, setMeetingTitle] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [transcribing, setTranscribing] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'transcribing' | 'complete' | 'error'>('idle');
+  const [stage, setStage] = useState<ProcessingStage>('idle');
+  const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [estimatedTime, setEstimatedTime] = useState<string>('');
+  const [willChunk, setWillChunk] = useState(false);
+  const [willExtractAudio, setWillExtractAudio] = useState(false);
+  const [willCompress, setWillCompress] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Supported file types
@@ -26,7 +32,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
   const ALL_SUPPORTED = [...SUPPORTED_AUDIO, ...SUPPORTED_VIDEO];
   const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -44,8 +50,10 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
     }
 
     setSelectedFile(file);
-    setStatus('idle');
+    setProcessedFile(null);
+    setStage('idle');
     setErrorMessage('');
+    setProgress(0);
 
     // Auto-generate meeting title from filename
     if (!meetingTitle) {
@@ -53,26 +61,68 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
       setMeetingTitle(title);
     }
 
-    // Estimate processing time (rough estimate)
-    const fileSizeMB = file.size / (1024 * 1024);
-    const estimatedMinutes = Math.ceil(fileSizeMB / 10); // ~10MB per minute of processing
-    setEstimatedTime(`${estimatedMinutes}-${estimatedMinutes + 2} minutes`);
+    // Analyze what processing is needed
+    const isVideo = isVideoFile(file);
+    const needsComp = needsCompression(file);
+    const needsChunk = needsChunking(file);
+
+    setWillExtractAudio(isVideo);
+    setWillCompress(!isVideo && needsComp);
+    setWillChunk(needsChunk);
+
+    // Estimate processing time
+    const estimate = estimateProcessingTime(file, needsChunk);
+    setEstimatedTime(estimate);
+
+    console.log('📊 File analysis:', {
+      isVideo,
+      needsCompression: needsComp,
+      needsChunking: needsChunk,
+      estimatedTime: estimate,
+    });
   };
 
   const handleUpload = async () => {
     if (!selectedFile) return;
 
-    setStatus('uploading');
-    setUploading(true);
+    setStage('extracting');
     setErrorMessage('');
 
     try {
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('meetingTitle', meetingTitle || selectedFile.name);
+      let fileToProcess = selectedFile;
 
-      // Upload and transcribe
+      // Step 1: Extract audio from video (client-side, FREE!)
+      if (willExtractAudio) {
+        toast('Extracting audio from video...');
+        setProgress(10);
+        fileToProcess = await extractAudioFromVideo(selectedFile, (prog) => {
+          setProgress(10 + prog * 0.2); // 10-30%
+        });
+        console.log(`✅ Audio extracted: ${(fileToProcess.size / (1024 * 1024)).toFixed(2)}MB`);
+      }
+
+      // Step 2: Compress audio if needed (client-side, FREE!)
+      if (willCompress || (willExtractAudio && needsCompression(fileToProcess))) {
+        setStage('compressing');
+        toast('Compressing audio...');
+        setProgress(30);
+        fileToProcess = await compressAudio(fileToProcess, (prog) => {
+          setProgress(30 + prog * 0.2); // 30-50%
+        });
+        console.log(`✅ Audio compressed: ${(fileToProcess.size / (1024 * 1024)).toFixed(2)}MB`);
+      }
+
+      setProcessedFile(fileToProcess);
+
+      // Step 3: Upload and transcribe (API call, costs money)
+      setStage('uploading');
+      setProgress(50);
+
+      const formData = new FormData();
+      formData.append('file', fileToProcess);
+      formData.append('meetingTitle', meetingTitle || selectedFile.name);
+      formData.append('needsChunking', willChunk.toString());
+
       const response = await fetch('/api/transcribe/upload', {
         method: 'POST',
         body: formData,
@@ -85,28 +135,29 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
 
       const data = await response.json();
 
-      if (data.jobId) {
-        // Transcription job started - poll for completion
-        setStatus('transcribing');
-        setTranscribing(true);
-        pollTranscriptionStatus(data.jobId);
-      } else if (data.transcript) {
-        // Immediate response (shouldn't happen with async processing)
+      setStage('transcribing');
+      setProgress(70);
+
+      if (data.transcript) {
+        // Immediate response
         handleTranscriptionComplete(data.transcript);
+      } else if (data.jobId) {
+        // Async processing
+        pollTranscriptionStatus(data.jobId);
+      } else {
+        throw new Error('Unexpected response from server');
       }
 
     } catch (error) {
       console.error('Upload error:', error);
-      setStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'Upload failed');
-      toast.error('Failed to upload recording');
-    } finally {
-      setUploading(false);
+      setStage('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Processing failed');
+      toast.error('Failed to process recording');
     }
   };
 
   const pollTranscriptionStatus = async (jobId: string) => {
-    const maxAttempts = 120; // 10 minutes max (5 second intervals)
+    const maxAttempts = 120;
     let attempts = 0;
 
     const poll = async () => {
@@ -119,23 +170,21 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
         } else if (data.status === 'failed') {
           throw new Error(data.error || 'Transcription failed');
         } else if (data.status === 'processing' || data.status === 'pending') {
-          // Update progress if available
           if (data.progress) {
-            setUploadProgress(data.progress);
+            setProgress(70 + data.progress * 0.3); // 70-100%
           }
 
           attempts++;
           if (attempts < maxAttempts) {
-            setTimeout(poll, 5000); // Poll every 5 seconds
+            setTimeout(poll, 5000);
           } else {
-            throw new Error('Transcription timeout - please try again');
+            throw new Error('Transcription timeout');
           }
         }
       } catch (error) {
         console.error('Polling error:', error);
-        setStatus('error');
+        setStage('error');
         setErrorMessage(error instanceof Error ? error.message : 'Transcription failed');
-        setTranscribing(false);
         toast.error('Transcription failed');
       }
     };
@@ -144,11 +193,10 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
   };
 
   const handleTranscriptionComplete = (transcript: string) => {
-    setStatus('complete');
-    setTranscribing(false);
+    setStage('complete');
+    setProgress(100);
     toast.success('Transcription complete!');
     
-    // Pass transcript back to parent
     setTimeout(() => {
       onTranscriptionComplete(transcript, meetingTitle || selectedFile?.name || 'Meeting');
     }, 1000);
@@ -157,8 +205,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
   const getFileIcon = () => {
     if (!selectedFile) return <Upload className="w-8 h-8 text-gray-400" />;
     
-    const extension = selectedFile.name.split('.').pop()?.toLowerCase();
-    if (SUPPORTED_VIDEO.some(ext => ext.includes(extension || ''))) {
+    if (isVideoFile(selectedFile)) {
       return <Video className="w-8 h-8 text-purple-600" />;
     }
     return <Mic className="w-8 h-8 text-indigo-600" />;
@@ -169,6 +216,23 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
+
+  const getStageMessage = () => {
+    switch (stage) {
+      case 'extracting':
+        return 'Extracting audio from video...';
+      case 'compressing':
+        return 'Compressing audio...';
+      case 'uploading':
+        return 'Uploading to server...';
+      case 'transcribing':
+        return willChunk ? 'Transcribing (processing chunks)...' : 'Transcribing with AI...';
+      default:
+        return 'Processing...';
+    }
+  };
+
+  const isProcessing = ['extracting', 'compressing', 'uploading', 'transcribing'].includes(stage);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -184,7 +248,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
         </div>
         <button
           onClick={onCancel}
-          disabled={uploading || transcribing}
+          disabled={isProcessing}
           className="text-gray-400 hover:text-gray-600 transition disabled:opacity-50"
         >
           <X className="w-6 h-6" />
@@ -202,7 +266,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
           onChange={(e) => setMeetingTitle(e.target.value)}
           placeholder="e.g., Q1 Planning Meeting"
           className="w-full px-4 py-2 border border-gray-300 rounded-lg text-indigo-600 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-          disabled={uploading || transcribing}
+          disabled={isProcessing}
         />
       </div>
 
@@ -225,15 +289,15 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
             className="hidden"
             accept={ALL_SUPPORTED.join(',')}
             onChange={handleFileSelect}
-            disabled={uploading || transcribing}
+            disabled={isProcessing}
           />
         </div>
       )}
 
       {/* Selected File Display */}
-      {selectedFile && status === 'idle' && (
+      {selectedFile && stage === 'idle' && (
         <div className="border-2 border-purple-200 rounded-lg p-6 bg-purple-50">
-          <div className="flex items-start space-x-4">
+          <div className="flex items-start space-x-4 mb-4">
             <div className="flex-shrink-0">
               {getFileIcon()}
             </div>
@@ -244,13 +308,14 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
               </p>
               {estimatedTime && (
                 <p className="text-xs text-purple-700 mt-1">
-                  ⏱️ Estimated processing time: {estimatedTime}
+                  ⏱️ Estimated time: {estimatedTime}
                 </p>
               )}
             </div>
             <button
               onClick={() => {
                 setSelectedFile(null);
+                setProcessedFile(null);
                 setMeetingTitle('');
                 if (fileInputRef.current) fileInputRef.current.value = '';
               }}
@@ -260,7 +325,38 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
             </button>
           </div>
 
-          <div className="mt-6 flex space-x-3">
+          {/* Processing Plan */}
+          {(willExtractAudio || willCompress || willChunk) && (
+            <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
+              <p className="text-sm font-semibold text-gray-900 mb-2">Processing Plan:</p>
+              <div className="space-y-1 text-xs text-gray-700">
+                {willExtractAudio && (
+                  <div className="flex items-center space-x-2">
+                    <Video className="w-4 h-4 text-purple-600" />
+                    <span>Extract audio from video (in browser, free)</span>
+                  </div>
+                )}
+                {willCompress && (
+                  <div className="flex items-center space-x-2">
+                    <Mic className="w-4 h-4 text-indigo-600" />
+                    <span>Compress audio (in browser, free)</span>
+                  </div>
+                )}
+                {willChunk && (
+                  <div className="flex items-center space-x-2">
+                    <Scissors className="w-4 h-4 text-orange-600" />
+                    <span>Split into chunks (file is large)</span>
+                  </div>
+                )}
+                <div className="flex items-center space-x-2 text-green-700 font-semibold">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Transcribe with AI</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex space-x-3">
             <button
               onClick={() => {
                 setSelectedFile(null);
@@ -274,48 +370,52 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
               onClick={handleUpload}
               className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
             >
-              Upload & Transcribe
+              Process Recording
             </button>
           </div>
         </div>
       )}
 
       {/* Processing States */}
-      {(status === 'uploading' || status === 'transcribing') && (
+      {isProcessing && (
         <div className="border-2 border-purple-200 rounded-lg p-8 bg-purple-50">
           <div className="text-center">
             <Loader2 className="w-12 h-12 text-purple-600 animate-spin mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              {status === 'uploading' ? 'Uploading...' : 'Transcribing with AI...'}
+              {getStageMessage()}
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              {status === 'uploading' 
-                ? 'Sending your recording to our servers...' 
-                : 'Our AI is processing your recording. This may take a few minutes.'}
+              {stage === 'extracting' || stage === 'compressing'
+                ? 'Processing in your browser (free!)' 
+                : 'This may take a few minutes...'}
             </p>
             
             {/* Progress Bar */}
-            {uploadProgress > 0 && (
-              <div className="max-w-xs mx-auto">
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div
-                    className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-600">{uploadProgress}% complete</p>
+            <div className="max-w-xs mx-auto">
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                <div
+                  className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
               </div>
+              <p className="text-xs text-gray-600">{progress}% complete</p>
+            </div>
+
+            {processedFile && (
+              <p className="text-xs text-green-700 mt-4">
+                ✅ Optimized: {formatFileSize(selectedFile!.size)} → {formatFileSize(processedFile.size)}
+              </p>
             )}
 
             <p className="text-xs text-gray-500 mt-4">
-              ☕ Grab a coffee - we'll email you when it's ready!
+              ☕ This runs in your browser - feel free to keep working!
             </p>
           </div>
         </div>
       )}
 
       {/* Success State */}
-      {status === 'complete' && (
+      {stage === 'complete' && (
         <div className="border-2 border-green-200 rounded-lg p-8 bg-green-50 text-center">
           <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -328,20 +428,22 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
       )}
 
       {/* Error State */}
-      {status === 'error' && (
+      {stage === 'error' && (
         <div className="border-2 border-red-200 rounded-lg p-8 bg-red-50">
           <div className="flex items-start space-x-3">
             <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-red-900 mb-2">
-                Transcription Failed
+                Processing Failed
               </h3>
               <p className="text-sm text-red-700 mb-4">{errorMessage}</p>
               <button
                 onClick={() => {
-                  setStatus('idle');
+                  setStage('idle');
                   setSelectedFile(null);
+                  setProcessedFile(null);
                   setErrorMessage('');
+                  setProgress(0);
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
@@ -354,16 +456,17 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
       )}
 
       {/* Info Box */}
-      {status === 'idle' && !selectedFile && (
+      {stage === 'idle' && !selectedFile && (
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-start space-x-3">
             <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-blue-800">
-              <p className="font-semibold mb-1">How it works:</p>
+              <p className="font-semibold mb-1">💰 Cost-Saving Features:</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Upload your meeting recording (audio or video)</li>
-                <li>Our AI transcribes it automatically (5-10 minutes)</li>
-                <li>Action items are extracted and ready to use</li>
+                <li>Video → Audio extraction happens in your browser (free!)</li>
+                <li>Audio compression reduces file size by 50-80% (free!)</li>
+                <li>Large files automatically chunked for processing</li>
+                <li>Only pay for transcription time (~$0.36 per hour)</li>
                 <li>Your recording is deleted after processing (privacy first!)</li>
               </ol>
             </div>

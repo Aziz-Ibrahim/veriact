@@ -11,9 +11,8 @@ const openai = new OpenAI({
 });
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB for Pro users
-const SUPPORTED_AUDIO = ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'];
-const SUPPORTED_VIDEO = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
-const ALL_SUPPORTED = [...SUPPORTED_AUDIO, ...SUPPORTED_VIDEO];
+const WHISPER_MAX_SIZE = 25 * 1024 * 1024; // 25MB Whisper limit
+const CHUNK_SIZE = 24 * 1024 * 1024; // 24MB chunks
 
 export async function POST(request: NextRequest) {
   let tempFilePath: string | null = null;
@@ -28,14 +27,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check subscription - must be Pro or Enterprise
+    // Check subscription
     const subscription = await getUserSubscription(user.id);
     
     if (subscription.plan === 'free') {
       return NextResponse.json(
         { 
           error: 'Audio/Video upload requires Pro or Enterprise plan',
-          currentPlan: subscription.plan,
           upgradeUrl: '/checkout?plan=pro'
         },
         { status: 403 }
@@ -46,6 +44,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const meetingTitle = formData.get('meetingTitle') as string;
+    const needsChunking = formData.get('needsChunking') === 'true';
 
     if (!file) {
       return NextResponse.json(
@@ -54,7 +53,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
@@ -62,49 +60,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!extension || !ALL_SUPPORTED.includes(extension)) {
-      return NextResponse.json(
-        { error: `Unsupported file type. Supported: ${ALL_SUPPORTED.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    console.log(`📤 Processing upload: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+    console.log(`📤 Processing: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+    console.log(`📊 Needs chunking: ${needsChunking}`);
 
     // Convert File to Buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Save temporarily (Whisper API needs a file path)
-    const tempDir = '/tmp'; // Use /tmp in production (Vercel)
+    // Save temporarily
+    const tempDir = '/tmp';
+    const extension = file.name.split('.').pop() || 'mp3';
     const tempFileName = `${randomUUID()}.${extension}`;
     tempFilePath = join(tempDir, tempFileName);
     
     await writeFile(tempFilePath, buffer);
-
     console.log(`💾 Saved temp file: ${tempFilePath}`);
 
-    // For video files, we need to extract audio first
-    let audioFilePath = tempFilePath;
-    if (SUPPORTED_VIDEO.includes(extension)) {
-      // Note: In production, you'd use ffmpeg to extract audio
-      // For now, we'll try to send the video directly (Whisper might handle it)
-      console.log(`🎥 Video file detected, attempting transcription...`);
+    let finalTranscript: string;
+
+    if (needsChunking && file.size > WHISPER_MAX_SIZE) {
+      // Process in chunks
+      console.log('🔪 File needs chunking...');
+      finalTranscript = await transcribeInChunks(buffer, extension);
+    } else {
+      // Process as single file
+      console.log('🎤 Transcribing as single file...');
+      const fs = await import('fs');
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(tempFilePath),
+        model: 'whisper-1',
+        language: 'en',
+        response_format: 'verbose_json',
+      });
+      finalTranscript = transcription.text;
     }
 
-    // Transcribe with OpenAI Whisper
-    console.log('🎤 Starting transcription with Whisper API...');
-    
-    const transcription = await openai.audio.transcriptions.create({
-      file: await import('fs').then(fs => fs.createReadStream(audioFilePath)),
-      model: 'whisper-1',
-      language: 'en', // Can be auto-detected by omitting this
-      response_format: 'verbose_json', // Get timestamps and more metadata
-    });
-
-    console.log(`✅ Transcription complete: ${transcription.text.length} characters`);
+    console.log(`✅ Transcription complete: ${finalTranscript.length} characters`);
 
     // Clean up temp file
     try {
@@ -123,7 +114,7 @@ export async function POST(request: NextRequest) {
         details: {
           file_name: file.name,
           file_size: file.size,
-          duration: transcription.duration || 0,
+          was_chunked: needsChunking && file.size > WHISPER_MAX_SIZE,
           meeting_title: meetingTitle,
           plan: subscription.plan,
         },
@@ -134,8 +125,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      transcript: transcription.text,
-      duration: transcription.duration,
+      transcript: finalTranscript,
       meetingTitle: meetingTitle || file.name.replace(/\.[^/.]+$/, ''),
     });
 
@@ -151,14 +141,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Handle specific OpenAI errors
-    if (error instanceof Error && error.message.includes('file size')) {
-      return NextResponse.json(
-        { error: 'File too large for transcription. Please use a smaller file.' },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'Transcription failed',
@@ -169,9 +151,64 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Configuration for Next.js to handle large files
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+async function transcribeInChunks(buffer: Buffer, extension: string): Promise<string> {
+  const numChunks = Math.ceil(buffer.length / CHUNK_SIZE);
+  console.log(`📦 Splitting into ${numChunks} chunks...`);
+
+  const transcripts: Array<{ index: number; text: string }> = [];
+  const fs = await import('fs');
+  const tempDir = '/tmp';
+
+  for (let i = 0; i < numChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, buffer.length);
+    const chunkBuffer = buffer.slice(start, end);
+    
+    // Save chunk temporarily
+    const chunkFileName = `chunk-${randomUUID()}.${extension}`;
+    const chunkPath = join(tempDir, chunkFileName);
+    
+    try {
+      await writeFile(chunkPath, chunkBuffer);
+      
+      console.log(`  Transcribing chunk ${i + 1}/${numChunks} (${(chunkBuffer.length / (1024 * 1024)).toFixed(2)}MB)...`);
+      
+      // Transcribe chunk
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(chunkPath),
+        model: 'whisper-1',
+        language: 'en',
+        response_format: 'text',
+      });
+      
+      transcripts.push({
+        index: i,
+        text: transcription,
+      });
+      
+      console.log(`  ✅ Chunk ${i + 1} done`);
+      
+      // Clean up chunk file
+      await unlink(chunkPath);
+      
+    } catch (error) {
+      console.error(`  ❌ Chunk ${i + 1} failed:`, error);
+      // Try to clean up
+      try {
+        await unlink(chunkPath);
+      } catch {}
+      throw error;
+    }
+  }
+
+  // Merge transcripts
+  console.log('🔗 Merging transcripts...');
+  const sorted = transcripts.sort((a, b) => a.index - b.index);
+  const merged = sorted
+    .map(t => t.text.trim())
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  return merged;
+}
