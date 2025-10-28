@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { getUserSubscription } from '@/lib/subscription';
 import OpenAI from 'openai';
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { randomUUID } from 'crypto';
+import { 
+  downloadFromStorage, 
+  deleteFromStorage,
+  uploadToTempStorage 
+} from '@/lib/supabaseStorage';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -15,7 +17,7 @@ const WHISPER_MAX_SIZE = 25 * 1024 * 1024; // 25MB Whisper limit
 const CHUNK_SIZE = 24 * 1024 * 1024; // 24MB chunks
 
 export async function POST(request: NextRequest) {
-  let tempFilePath: string | null = null;
+  let storagePath: string | null = null;
 
   try {
     const user = await currentUser();
@@ -42,67 +44,94 @@ export async function POST(request: NextRequest) {
 
     // Parse form data
     const formData = await request.formData();
-    const file = formData.get('file') as File;
     const meetingTitle = formData.get('meetingTitle') as string;
     const needsChunking = formData.get('needsChunking') === 'true';
+    
+    // Check if it's a storage path or actual file
+    const storagePathParam = formData.get('storagePath') as string | null;
+    const fileParam = formData.get('file') as File | null;
 
-    if (!file) {
+    if (!storagePathParam && !fileParam) {
       return NextResponse.json(
-        { error: 'No file provided' },
+        { error: 'No file or storage path provided' },
         { status: 400 }
       );
     }
 
-    if (file.size > MAX_FILE_SIZE) {
+    let fileToProcess: Blob;
+    let fileName: string;
+    let fileSize: number;
+
+    if (storagePathParam) {
+      // File already uploaded to Supabase - download it
+      console.log('📥 Downloading from storage:', storagePathParam);
+      storagePath = storagePathParam;
+
+      const downloadResult = await downloadFromStorage(storagePathParam);
+      if (!downloadResult.success || !downloadResult.data) {
+        throw new Error(downloadResult.error || 'Failed to download file');
+      }
+
+      fileToProcess = downloadResult.data;
+      fileSize = downloadResult.data.size;
+      fileName = storagePathParam.split('/').pop() || 'recording';
+    } else if (fileParam) {
+      // Direct file upload (legacy path)
+      fileToProcess = fileParam;
+      fileSize = fileParam.size;
+      fileName = fileParam.name;
+    } else {
+      return NextResponse.json(
+        { error: 'Invalid request' },
+        { status: 400 }
+      );
+    }
+
+    if (fileSize > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
         { status: 400 }
       );
     }
 
-    console.log(`📤 Processing: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+    console.log(`📤 Processing: ${fileName} (${(fileSize / (1024 * 1024)).toFixed(2)}MB)`);
     console.log(`📊 Needs chunking: ${needsChunking}`);
-
-    // Convert File to Buffer
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    // Save temporarily
-    const tempDir = '/tmp';
-    const extension = file.name.split('.').pop() || 'mp3';
-    const tempFileName = `${randomUUID()}.${extension}`;
-    tempFilePath = join(tempDir, tempFileName);
-    
-    await writeFile(tempFilePath, buffer);
-    console.log(`💾 Saved temp file: ${tempFilePath}`);
 
     let finalTranscript: string;
 
-    if (needsChunking && file.size > WHISPER_MAX_SIZE) {
+    if (needsChunking && fileSize > WHISPER_MAX_SIZE) {
       // Process in chunks
       console.log('🔪 File needs chunking...');
-      finalTranscript = await transcribeInChunks(buffer, extension);
+      finalTranscript = await transcribeInChunks(fileToProcess, fileName);
     } else {
       // Process as single file
       console.log('🎤 Transcribing as single file...');
-      const fs = await import('fs');
+      
+      // Convert Blob to File for OpenAI API
+      const file = new File([fileToProcess], fileName, { type: fileToProcess.type });
+      
       const transcription = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(tempFilePath),
+        file,
         model: 'whisper-1',
         language: 'en',
         response_format: 'verbose_json',
       });
+      
       finalTranscript = transcription.text;
     }
 
     console.log(`✅ Transcription complete: ${finalTranscript.length} characters`);
 
-    // Clean up temp file
-    try {
-      await unlink(tempFilePath);
-      console.log(`🗑️ Cleaned up temp file`);
-    } catch (err) {
-      console.error('Failed to delete temp file:', err);
+    // Clean up: Delete file from storage
+    if (storagePath) {
+      console.log('🗑️  Deleting file from storage...');
+      const deleteResult = await deleteFromStorage(storagePath);
+      if (deleteResult.success) {
+        console.log('✅ Storage cleaned up');
+      } else {
+        console.warn('⚠️  Failed to delete from storage:', deleteResult.error);
+        // Don't fail the request if cleanup fails
+      }
     }
 
     // Log usage
@@ -112,11 +141,12 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         action: 'audio_transcribed',
         details: {
-          file_name: file.name,
-          file_size: file.size,
-          was_chunked: needsChunking && file.size > WHISPER_MAX_SIZE,
+          file_name: fileName,
+          file_size: fileSize,
+          was_chunked: needsChunking && fileSize > WHISPER_MAX_SIZE,
           meeting_title: meetingTitle,
           plan: subscription.plan,
+          used_storage: !!storagePath,
         },
       });
     } catch (logError) {
@@ -126,18 +156,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       transcript: finalTranscript,
-      meetingTitle: meetingTitle || file.name.replace(/\.[^/.]+$/, ''),
+      meetingTitle: meetingTitle || fileName.replace(/\.[^/.]+$/, ''),
     });
 
   } catch (error) {
     console.error('❌ Transcription error:', error);
 
-    // Clean up temp file on error
-    if (tempFilePath) {
+    // Clean up storage on error
+    if (storagePath) {
       try {
-        await unlink(tempFilePath);
-      } catch (err) {
-        console.error('Failed to delete temp file on error:', err);
+        await deleteFromStorage(storagePath);
+        console.log('✅ Cleaned up storage after error');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup storage:', cleanupError);
       }
     }
 
@@ -151,31 +182,29 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function transcribeInChunks(buffer: Buffer, extension: string): Promise<string> {
-  const numChunks = Math.ceil(buffer.length / CHUNK_SIZE);
+async function transcribeInChunks(blob: Blob, originalFileName: string): Promise<string> {
+  const numChunks = Math.ceil(blob.size / CHUNK_SIZE);
   console.log(`📦 Splitting into ${numChunks} chunks...`);
 
   const transcripts: Array<{ index: number; text: string }> = [];
-  const fs = await import('fs');
-  const tempDir = '/tmp';
 
   for (let i = 0; i < numChunks; i++) {
     const start = i * CHUNK_SIZE;
-    const end = Math.min(start + CHUNK_SIZE, buffer.length);
-    const chunkBuffer = buffer.slice(start, end);
+    const end = Math.min(start + CHUNK_SIZE, blob.size);
+    const chunkBlob = blob.slice(start, end, blob.type);
     
-    // Save chunk temporarily
-    const chunkFileName = `chunk-${randomUUID()}.${extension}`;
-    const chunkPath = join(tempDir, chunkFileName);
+    // Create File from Blob
+    const extension = originalFileName.split('.').pop() || 'mp3';
+    const chunkFile = new File([chunkBlob], `chunk-${i}.${extension}`, { 
+      type: blob.type 
+    });
     
     try {
-      await writeFile(chunkPath, chunkBuffer);
-      
-      console.log(`  Transcribing chunk ${i + 1}/${numChunks} (${(chunkBuffer.length / (1024 * 1024)).toFixed(2)}MB)...`);
+      console.log(`  Transcribing chunk ${i + 1}/${numChunks} (${(chunkBlob.size / (1024 * 1024)).toFixed(2)}MB)...`);
       
       // Transcribe chunk
       const transcription = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(chunkPath),
+        file: chunkFile,
         model: 'whisper-1',
         language: 'en',
         response_format: 'text',
@@ -188,15 +217,8 @@ async function transcribeInChunks(buffer: Buffer, extension: string): Promise<st
       
       console.log(`  ✅ Chunk ${i + 1} done`);
       
-      // Clean up chunk file
-      await unlink(chunkPath);
-      
     } catch (error) {
       console.error(`  ❌ Chunk ${i + 1} failed:`, error);
-      // Try to clean up
-      try {
-        await unlink(chunkPath);
-      } catch {}
       throw error;
     }
   }

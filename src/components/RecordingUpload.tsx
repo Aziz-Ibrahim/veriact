@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { Video, Mic, Upload, X, Loader2, CheckCircle, AlertCircle, FileAudio, Scissors } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { extractAudioFromVideo, compressAudio, isVideoFile, needsCompression } from '@/lib/audioExtractor';
 import { needsChunking, estimateProcessingTime } from '@/lib/fileChunker';
+import { uploadToTempStorage } from '@/lib/supabaseStorage';
 
 interface RecordingUploadProps {
   onTranscriptionComplete: (transcript: string, meetingTitle: string) => void;
@@ -14,6 +16,7 @@ interface RecordingUploadProps {
 type ProcessingStage = 'idle' | 'extracting' | 'compressing' | 'uploading' | 'transcribing' | 'complete' | 'error';
 
 export default function RecordingUpload({ onTranscriptionComplete, onCancel }: RecordingUploadProps) {
+  const { user } = useUser();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processedFile, setProcessedFile] = useState<File | null>(null);
   const [meetingTitle, setMeetingTitle] = useState('');
@@ -24,6 +27,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
   const [willChunk, setWillChunk] = useState(false);
   const [willExtractAudio, setWillExtractAudio] = useState(false);
   const [willCompress, setWillCompress] = useState(false);
+  const [storagePath, setStoragePath] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Supported file types
@@ -54,6 +58,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
     setStage('idle');
     setErrorMessage('');
     setProgress(0);
+    setStoragePath(null);
 
     // Auto-generate meeting title from filename
     if (!meetingTitle) {
@@ -83,43 +88,61 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !user) return;
 
     setStage('extracting');
     setErrorMessage('');
 
     try {
-      let fileToProcess = selectedFile;
+      let fileToUpload = selectedFile;
 
       // Step 1: Extract audio from video (client-side, FREE!)
       if (willExtractAudio) {
         toast('Extracting audio from video...');
         setProgress(10);
-        fileToProcess = await extractAudioFromVideo(selectedFile, (prog) => {
+        fileToUpload = await extractAudioFromVideo(selectedFile, (prog) => {
           setProgress(10 + prog * 0.2); // 10-30%
         });
-        console.log(`✅ Audio extracted: ${(fileToProcess.size / (1024 * 1024)).toFixed(2)}MB`);
+        console.log(`✅ Audio extracted: ${(fileToUpload.size / (1024 * 1024)).toFixed(2)}MB`);
       }
 
       // Step 2: Compress audio if needed (client-side, FREE!)
-      if (willCompress || (willExtractAudio && needsCompression(fileToProcess))) {
+      if (willCompress || (willExtractAudio && needsCompression(fileToUpload))) {
         setStage('compressing');
         toast('Compressing audio...');
         setProgress(30);
-        fileToProcess = await compressAudio(fileToProcess, (prog) => {
+        fileToUpload = await compressAudio(fileToUpload, (prog) => {
           setProgress(30 + prog * 0.2); // 30-50%
         });
-        console.log(`✅ Audio compressed: ${(fileToProcess.size / (1024 * 1024)).toFixed(2)}MB`);
+        console.log(`✅ Audio compressed: ${(fileToUpload.size / (1024 * 1024)).toFixed(2)}MB`);
       }
 
-      setProcessedFile(fileToProcess);
+      setProcessedFile(fileToUpload);
 
-      // Step 3: Upload and transcribe (API call, costs money)
+      // Step 3: Upload to Supabase Storage
       setStage('uploading');
       setProgress(50);
+      toast('Uploading to secure storage...');
+
+      const uploadResult = await uploadToTempStorage(fileToUpload, user.id, (prog) => {
+        setProgress(50 + prog * 0.2); // 50-70%
+      });
+
+      if (!uploadResult.success || !uploadResult.path) {
+        throw new Error(uploadResult.error || 'Upload to storage failed');
+      }
+
+      const uploadedPath = uploadResult.path;
+      setStoragePath(uploadedPath);
+      console.log('✅ Uploaded to storage:', uploadedPath);
+
+      // Step 4: Call API to process the file from storage
+      setStage('transcribing');
+      setProgress(70);
+      toast('Transcribing with AI...');
 
       const formData = new FormData();
-      formData.append('file', fileToProcess);
+      formData.append('storagePath', uploadedPath);
       formData.append('meetingTitle', meetingTitle || selectedFile.name);
       formData.append('needsChunking', willChunk.toString());
 
@@ -130,22 +153,15 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
+        throw new Error(error.error || 'Transcription failed');
       }
 
       const data = await response.json();
 
-      setStage('transcribing');
-      setProgress(70);
-
       if (data.transcript) {
-        // Immediate response
         handleTranscriptionComplete(data.transcript);
-      } else if (data.jobId) {
-        // Async processing
-        pollTranscriptionStatus(data.jobId);
       } else {
-        throw new Error('Unexpected response from server');
+        throw new Error('No transcript received');
       }
 
     } catch (error) {
@@ -154,42 +170,6 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
       setErrorMessage(error instanceof Error ? error.message : 'Processing failed');
       toast.error('Failed to process recording');
     }
-  };
-
-  const pollTranscriptionStatus = async (jobId: string) => {
-    const maxAttempts = 120;
-    let attempts = 0;
-
-    const poll = async () => {
-      try {
-        const response = await fetch(`/api/transcribe/status/${jobId}`);
-        const data = await response.json();
-
-        if (data.status === 'completed' && data.transcript) {
-          handleTranscriptionComplete(data.transcript);
-        } else if (data.status === 'failed') {
-          throw new Error(data.error || 'Transcription failed');
-        } else if (data.status === 'processing' || data.status === 'pending') {
-          if (data.progress) {
-            setProgress(70 + data.progress * 0.3); // 70-100%
-          }
-
-          attempts++;
-          if (attempts < maxAttempts) {
-            setTimeout(poll, 5000);
-          } else {
-            throw new Error('Transcription timeout');
-          }
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-        setStage('error');
-        setErrorMessage(error instanceof Error ? error.message : 'Transcription failed');
-        toast.error('Transcription failed');
-      }
-    };
-
-    poll();
   };
 
   const handleTranscriptionComplete = (transcript: string) => {
@@ -224,7 +204,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
       case 'compressing':
         return 'Compressing audio...';
       case 'uploading':
-        return 'Uploading to server...';
+        return 'Uploading to secure storage...';
       case 'transcribing':
         return willChunk ? 'Transcribing (processing chunks)...' : 'Transcribing with AI...';
       default:
@@ -342,6 +322,10 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
                     <span>Compress audio (in browser, free)</span>
                   </div>
                 )}
+                <div className="flex items-center space-x-2 text-blue-700 font-semibold">
+                  <Upload className="w-4 h-4" />
+                  <span>Upload to secure storage</span>
+                </div>
                 {willChunk && (
                   <div className="flex items-center space-x-2">
                     <Scissors className="w-4 h-4 text-orange-600" />
@@ -386,7 +370,9 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
             </h3>
             <p className="text-sm text-gray-600 mb-4">
               {stage === 'extracting' || stage === 'compressing'
-                ? 'Processing in your browser' 
+                ? 'Processing in your browser (free!)' 
+                : stage === 'uploading'
+                ? 'Uploading to secure cloud storage...'
                 : 'This may take a few minutes...'}
             </p>
             
@@ -407,8 +393,14 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
               </p>
             )}
 
+            {stage === 'uploading' && (
+              <p className="text-xs text-blue-600 mt-4">
+                🔒 File uploaded securely - will auto-delete after processing
+              </p>
+            )}
+
             <p className="text-xs text-gray-500 mt-4">
-              ☕ This runs in your browser - feel free to keep working!
+              ☕ Feel free to keep working while this processes!
             </p>
           </div>
         </div>
@@ -423,6 +415,9 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
           </h3>
           <p className="text-sm text-gray-600">
             Extracting action items now...
+          </p>
+          <p className="text-xs text-green-700 mt-2">
+            ✅ Storage cleaned up automatically
           </p>
         </div>
       )}
@@ -444,6 +439,7 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
                   setProcessedFile(null);
                   setErrorMessage('');
                   setProgress(0);
+                  setStoragePath(null);
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
@@ -461,13 +457,13 @@ export default function RecordingUpload({ onTranscriptionComplete, onCancel }: R
           <div className="flex items-start space-x-3">
             <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-blue-800">
-              <p className="font-semibold mb-1">💰 Cost-Saving Features:</p>
+              <p className="font-semibold mb-1">🔒 Secure & Private Processing:</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Video → Audio extraction happens in your browser</li>
-                <li>Audio compression reduces file size by 50-80% </li>
-                <li>Large files automatically chunked for processing</li>
-                <li>Only pay for transcription time (~$0.36 per hour)</li>
-                <li>Your recording is deleted after processing (privacy first!)</li>
+                <li>Video → Audio extraction happens in your browser (free!)</li>
+                <li>Audio compression reduces file size by 50-80% (free!)</li>
+                <li>File uploaded to secure Supabase storage (encrypted)</li>
+                <li>AI transcription processes the file (~$0.36 per hour)</li>
+                <li>File automatically deleted after processing (privacy first!)</li>
               </ol>
             </div>
           </div>
