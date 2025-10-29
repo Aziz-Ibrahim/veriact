@@ -3,10 +3,9 @@ import { currentUser } from '@clerk/nextjs/server';
 import { getUserSubscription } from '@/lib/subscription';
 import OpenAI from 'openai';
 import { 
-  downloadFromStorage, 
-  deleteFromStorage,
-  uploadToTempStorage 
-} from '@/lib/supabaseStorage';
+  downloadFromStorageAdmin, 
+  deleteFromStorageAdmin,
+} from '@/lib/supabaseStorageAdmin';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -67,7 +66,7 @@ export async function POST(request: NextRequest) {
       console.log('📥 Downloading from storage:', storagePathParam);
       storagePath = storagePathParam;
 
-      const downloadResult = await downloadFromStorage(storagePathParam);
+      const downloadResult = await downloadFromStorageAdmin(storagePathParam);
       if (!downloadResult.success || !downloadResult.data) {
         throw new Error(downloadResult.error || 'Failed to download file');
       }
@@ -125,7 +124,7 @@ export async function POST(request: NextRequest) {
     // Clean up: Delete file from storage
     if (storagePath) {
       console.log('🗑️  Deleting file from storage...');
-      const deleteResult = await deleteFromStorage(storagePath);
+      const deleteResult = await deleteFromStorageAdmin(storagePath);
       if (deleteResult.success) {
         console.log('✅ Storage cleaned up');
       } else {
@@ -165,7 +164,7 @@ export async function POST(request: NextRequest) {
     // Clean up storage on error
     if (storagePath) {
       try {
-        await deleteFromStorage(storagePath);
+        await deleteFromStorageAdmin(storagePath);
         console.log('✅ Cleaned up storage after error');
       } catch (cleanupError) {
         console.error('Failed to cleanup storage:', cleanupError);

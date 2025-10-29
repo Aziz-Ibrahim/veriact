@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cleanupOldFiles } from '@/lib/supabaseStorage';
+import { cleanupOldFilesAdmin } from '@/lib/supabaseStorageAdmin';
 
 // Security: Only allow requests with correct authorization
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     console.log('🧹 Starting storage cleanup job...');
 
     // Clean up files older than 24 hours
-    const result = await cleanupOldFiles(24);
+    const result = await cleanupOldFilesAdmin(24);
 
     if (result.success) {
       console.log(`✅ Cleanup complete: ${result.deleted} files deleted`);
