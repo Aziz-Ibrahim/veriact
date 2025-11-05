@@ -20,7 +20,7 @@ export default function TermsPage() {
 
         <div className="bg-indigo-600 rounded-xl shadow-sm p-8 prose prose-indigo max-w-none">
           <h1>Terms of Service</h1>
-          <p className="text-sm text-gray-900">Last Updated: January 15, 2025</p>
+          <p className="text-sm text-gray-900">Last Updated: September 15, 2025</p>
 
           <p>
             Welcome to <strong>VeriAct</strong>. These Terms of Service ("Terms") govern your access
