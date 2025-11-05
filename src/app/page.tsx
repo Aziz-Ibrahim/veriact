@@ -1,9 +1,7 @@
-// src/app/page.tsx - Updated Features Grid and Pricing Section
-
 'use client';
 
 import { HeroBackground } from '../components/HeroBackground';
-import Footer from '@/components/footer';
+import Footer from '@/components/Footer';
 import { motion } from 'motion/react';
 import { CheckCircle2, Lock, Bell, Shield, Users, Download, Zap, Check, X, ArrowRight, Mic, Video, FileText } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
