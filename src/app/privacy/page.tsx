@@ -20,7 +20,7 @@ export default function PrivacyPage() {
 
         <div className="bg-indigo-500 rounded-xl shadow-sm p-8 prose prose-indigo max-w-none">
           <h1>Privacy Policy</h1>
-          <p className="text-sm text-gray-600">Last Updated: September 15, 2025</p>
+          <p className="text-sm text-gray-900">Last Updated: September 15, 2025</p>
 
           <p><strong>VeriAct</strong> (“we”, “our”, or “us”) operates https://veriact.com (the “Service”). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Service.</p>
           <p>By using VeriAct, you agree to the collection and use of information in accordance with this policy.</p>
