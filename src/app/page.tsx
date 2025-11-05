@@ -1,7 +1,7 @@
 'use client';
 
 import { HeroBackground } from '../components/HeroBackground';
-import Footer from '@/components/Footer';
+import Footer from '@/components/footer';
 import { motion } from 'motion/react';
 import { CheckCircle2, Lock, Bell, Shield, Users, Download, Zap, Check, X, ArrowRight, Mic, Video, FileText } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
