@@ -70,17 +70,17 @@ export default function Footer() {
             <h3 className="font-semibold text-gray-900 mb-3">Support</h3>
             <ul className="space-y-2">
               <li>
-                <a href="mailto:support@veriact.com" className="text-sm text-gray-600 hover:text-indigo-600">
+                <a href="mailto:support@veriact.co.uk" className="text-sm text-gray-600 hover:text-indigo-600">
                   Contact Support
                 </a>
               </li>
               <li>
-                <a href="mailto:privacy@veriact.com" className="text-sm text-gray-600 hover:text-indigo-600">
+                <a href="mailto:support@veriact.co.uk" className="text-sm text-gray-600 hover:text-indigo-600">
                   Privacy Inquiries
                 </a>
               </li>
               <li>
-                <a href="mailto:legal@veriact.com" className="text-sm text-gray-600 hover:text-indigo-600">
+                <a href="mailto:support@veriact.co.uk" className="text-sm text-gray-600 hover:text-indigo-600">
                   Legal Inquiries
                 </a>
               </li>
