@@ -3,6 +3,7 @@
 'use client';
 
 import { HeroBackground } from '../components/HeroBackground';
+import Footer from '@/components/footer';
 import { motion } from 'motion/react';
 import { CheckCircle2, Lock, Bell, Shield, Users, Download, Zap, Check, X, ArrowRight, Mic, Video, FileText } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
@@ -662,9 +663,7 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-gradient-to-br from-blue-50 to-indigo-100 border-t border-gray-200">
         <div className="container mx-auto px-4 py-8">
-          <p className="text-center text-gray-600">
-            Built with privacy in mind · VeriAct © 2025
-          </p>
+          < Footer />
         </div>
       </footer>
     </div>
